@@ -66,9 +66,9 @@ public partial class MainWindow : Window
         MenuResetView.Header = UiText.Reset;
         MenuLanguage.Header = UiText.MenuLanguage;
         MenuPreferences.Header = UiText.MenuPreferences;
-        MenuAdd.Header = UiText.MenuAdd;
-        MenuAdd.Items.Clear();
-        Viewport.PopulateAddMenu(MenuAdd.Items);
+        Viewport.ApplyHeaderLanguage();
+        
+        
         MenuRender.Header = UiText.MenuRender;
         MenuRenderImage.Header = UiText.MenuRenderImage;
         MenuRenderAnimation.Header = UiText.MenuRenderAnimation;

@@ -24,7 +24,7 @@ public sealed partial class ModelViewport
         Height = NavSize,
         HorizontalAlignment = HorizontalAlignment.Right,
         VerticalAlignment = VerticalAlignment.Top,
-        Margin = new Thickness(0, 36, 12, 0),
+        Margin = new Thickness(0, HeaderHeight + 12, 12, 0),
         Background = Brushes.Transparent,
         Cursor = Cursors.Hand,
     };

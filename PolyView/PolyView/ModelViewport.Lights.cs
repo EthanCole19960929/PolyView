@@ -91,6 +91,7 @@ public sealed partial class ModelViewport
         }
 
         _renderer.SetLights(_lightData, count, ambient, ShadingCode);
+        AddHelperOverlays();
         _renderer.SetLightIcons(_iconVertices, _iconCount);
     }
 
@@ -319,6 +320,12 @@ public sealed partial class ModelViewport
     /// <summary>Blender Add menu items (shared by Shift+A and the top-bar Add menu). Only lights are implemented.</summary>
     public void PopulateAddMenu(ItemCollection items)
     {
+        PopulateBlenderAddMenu(items);
+        if (items.Count > 0)
+        {
+            return;
+        }
+
         var menu = new { Items = items };
         menu.Items.Add(new MenuItem { Header = UiText.AddTitle, IsEnabled = false, InputGestureText = "Shift+A", Tag = "header" });
         menu.Items.Add(new Separator());

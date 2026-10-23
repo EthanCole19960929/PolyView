@@ -46,6 +46,11 @@ public sealed partial class ModelViewport
                 po.Kind = "model";
                 po.AssetId = asset.Id;
             }
+            else if (_primitiveSpecs.TryGetValue(o.Id, out var spec))
+            {
+                po.Kind = "primitive";
+                po.Builtin = SerializeSpec(spec);
+            }
             else if (o.Mesh.Nodes.Length == 1 && o.Mesh.Nodes[0].Light is { } light && o.Mesh.Vertices.Length == 0)
             {
                 po.Kind = "light";
@@ -131,6 +136,13 @@ public sealed partial class ModelViewport
                     if (po.Light != null)
                     {
                         obj = CreateLightObject(po);
+                    }
+
+                    break;
+                case "primitive":
+                    if (DeserializeSpec(po.Builtin) is { } ps)
+                    {
+                        obj = CreatePrimitiveObject(ps, po.Name);
                     }
 
                     break;

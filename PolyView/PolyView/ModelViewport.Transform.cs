@@ -82,7 +82,7 @@ public sealed partial class ModelViewport
             Background = Brushes.Transparent,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(6),
+            Margin = new Thickness(6, HeaderHeight + 6, 6, 6),
         };
         for (int i = 0; i < 4; i++)
         {
@@ -105,6 +105,7 @@ public sealed partial class ModelViewport
         grid.Children.Add(_modalCanvas);
         grid.Children.Add(_modalText);
         grid.Children.Add(BuildNavGizmo());
+        grid.Children.Add(BuildViewportHeader());
         grid.Children.Add(BuildShadingBar());
         ApplyToolbarLanguage();
         return grid;

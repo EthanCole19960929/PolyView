@@ -758,7 +758,7 @@ public sealed partial class ModelViewport : UserControl
             if ((point - _pressPoint).Length < 4)
             {
                 // 打中最近的对象就选中它；点空白处取消选择。
-                if (TryPickLight(point, out int lightObject, out int lightNode))
+                if (TryPickLight(point, out int lightObject, out int lightNode) || TryPickHelper(point, out lightObject, out lightNode))
                 {
                     SelectNode(lightObject, lightNode);
                 }

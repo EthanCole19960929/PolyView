@@ -50,7 +50,6 @@
                         <MenuItem x:Name="MenuLanguage" Click="LanguageButton_Click"/>
                         <MenuItem x:Name="MenuPreferences" IsEnabled="False"/>
                     </MenuItem>
-                    <MenuItem x:Name="MenuAdd"/>
                     <MenuItem x:Name="MenuRender">
                         <MenuItem x:Name="MenuRenderImage" IsEnabled="False" InputGestureText="F12"/>
                         <MenuItem x:Name="MenuRenderAnimation" IsEnabled="False" InputGestureText="Ctrl+F12"/>
@@ -81,7 +80,7 @@
         <local:OutlinerPanel x:Name="Outliner" DockPanel.Dock="Right" Width="300"/>
         <Grid>
             <local:ModelViewport x:Name="Viewport"/>
-            <TextBlock x:Name="ProjectionText" Foreground="#FFE6E6E6" Margin="52,8,0,0" FontSize="12"
+            <TextBlock x:Name="ProjectionText" Foreground="#FFE6E6E6" Margin="50,38,0,0" FontSize="12"
                        HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
         </Grid>
     </DockPanel>

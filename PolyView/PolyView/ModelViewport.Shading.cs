@@ -63,7 +63,7 @@ public sealed partial class ModelViewport
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 6, 10, 0),
+            Margin = new Thickness(0, 4, 10, 0),
         };
         for (int i = 0; i < 4; i++)
         {
