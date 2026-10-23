@@ -92,7 +92,7 @@ public static class Gizmo
                 {
                     AddCube(list, Axes[part] * 0.94f, 0.04f, Vertex.PackColor(Rgb[part]));
                 }
-                else if (part > Center && tool == 0)
+                else if (part > Center && tool != 1)
                 {
                     int plane = part - 4;
                     var color = Rgb[PlaneExcludedAxis[plane]];
@@ -227,7 +227,7 @@ public static class Gizmo
             bestDistance = MathF.Abs(toCenter - screenRadius);
         }
 
-        if (tool == TransformTool.Move)
+        if (tool != TransformTool.Rotate)
         {
             for (int plane = 0; plane < 3; plane++)
             {
