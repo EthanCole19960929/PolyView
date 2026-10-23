@@ -15,6 +15,8 @@ public sealed class ProjectDocument
     public List<ProjectAsset> Assets { get; set; } = [];
     public List<ProjectObject> Objects { get; set; } = [];
     public ProjectCollection Collection { get; set; } = new();
+    /// <summary>Scene Collection tree (nested collections + object ids). Null in old projects: everything goes into "Collection".</summary>
+    public ProjectCollectionNode? SceneCollection { get; set; }
     public ProjectView View { get; set; } = new();
     public ProjectSelection Selection { get; set; } = new();
 }
@@ -69,6 +71,17 @@ public sealed class ProjectCollection
     public bool Visible { get; set; } = true;
     public bool Renderable { get; set; } = true;
     public bool Expanded { get; set; } = true;
+}
+
+public sealed class ProjectCollectionNode
+{
+    public string Name { get; set; } = "Collection";
+    public bool Included { get; set; } = true;
+    public bool Visible { get; set; } = true;
+    public bool Renderable { get; set; } = true;
+    public bool Expanded { get; set; } = true;
+    public List<int> Objects { get; set; } = [];
+    public List<ProjectCollectionNode> Children { get; set; } = [];
 }
 
 public sealed class ProjectView

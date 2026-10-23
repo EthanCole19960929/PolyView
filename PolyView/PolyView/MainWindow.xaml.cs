@@ -81,7 +81,7 @@ public partial class MainWindow : Window
         MenuManual.Header = UiText.MenuManual;
         MenuAbout.Header = UiText.MenuAbout;
         BuildWorkspaceTabs();
-        HintText.Text = UiText.Hint;
+        HintText.Text = ""; // status bar hint removed (Blender keeps the left side empty)
         Outliner.ApplyLanguage();
         Viewport.ApplyToolbarLanguage();
         Viewport.ApplyShadingLanguage();

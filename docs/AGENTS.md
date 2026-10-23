@@ -192,3 +192,7 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 - **Draco 解码后的 min / max：** Draco 是量化压缩，解出来的坐标会略微超出 accessor 原来写的 min / max，SharpGLTF 读取时会校验并报错，所以重写 GLB 时要按解码结果重新算 min / max。
 - **draco_decoder.dll 依赖：** mingw 编出的 DLL 默认依赖 libgcc_s / libstdc++，Ethan 电脑上没有；CMake 的目标是 MODULE，要用 `CMAKE_MODULE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++"`，编完用 objdump 确认只依赖 KERNEL32 和 msvcrt。
 - **FPS 上限：** `--bench` 测到的 vsync FPS 最多约等于显示器刷新率，看 GPU 真实负载用「GPU ms/帧」。
+
+## Outliner collections
+- Scene Collection root with nested SceneCollection (Core/SceneCollection.cs); an object may be linked into several collections. UI in OutlinerPanel.Collections.cs (M move / Shift+M link, drag-drop with Ctrl = link, F2 rename, C new, X delete). Saved as ProjectDocument.SceneCollection; old projects load into one 'Collection'.
+- Object rows show Blender-style mesh-data (green) and material child rows. MCP: collection.* commands; get_scene includes collections.

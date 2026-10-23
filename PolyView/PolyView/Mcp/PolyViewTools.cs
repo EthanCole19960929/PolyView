@@ -45,7 +45,7 @@ public sealed class PolyViewTools
 
     static JsonObject Args(object o) => JsonSerializer.SerializeToNode(o, Json)!.AsObject();
 
-    [McpServerTool(Name = "list_commands"), Description("List PolyView commands (Blender-operator style ids like object.add_primitive). Optional category: scene | object | view | file. Use describe_command for parameters, run_command to execute.")]
+    [McpServerTool(Name = "list_commands"), Description("List PolyView commands (Blender-operator style ids like object.add_primitive). Optional category: scene | object | collection | view | file. Use describe_command for parameters, run_command to execute.")]
     public static string ListCommands([Description("Optional category filter")] string? category = null)
     {
         var arr = new JsonArray(CommandRegistry.All.Where(c => category == null || c.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).Select(c => (JsonNode)c.Summary()).ToArray());
@@ -61,7 +61,7 @@ public sealed class PolyViewTools
     public static Task<string> RunCommand([Description("Command id")] string id, [Description("Arguments object matching describe_command params")] JsonObject? args = null)
         => Run(id, args, "run " + id);
 
-    [McpServerTool(Name = "get_scene"), Description("List all scene objects (meshes, lights, primitives) with id, name, kind, visibility, transform (position, rotation euler degrees, scale), bounds, plus shading mode and selected id.")]
+    [McpServerTool(Name = "get_scene"), Description("List all scene objects (meshes, lights, primitives) with id, name, kind, visibility, transform (position, rotation euler degrees, scale), bounds, collection, plus the nested collection tree (Scene Collection root), shading mode and selected id.")]
     public static Task<string> GetScene() => Run("scene.get", null, "get_scene");
 
     [McpServerTool(Name = "add_primitive"), Description("Shortcut for object.add_primitive. type: plane | cube | circle | uvsphere | icosphere | cylinder | cone | torus | grid | text | pointcloud | camera | curve:bezier | curve:circle | curve:nurbs | curve:nurbscircle | curve:path | empty:plain_axes | empty:arrows | empty:single_arrow | empty:circle | empty:cube | empty:sphere | empty:cone | empty:image")]

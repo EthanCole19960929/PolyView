@@ -33,6 +33,7 @@ public sealed partial class ModelViewport : UserControl
     DragMode _drag;
     int _loadVersion;
     bool _resizePending = true;
+    long _lastResizeTick;
     bool _dirty = true;
     int _warmupFrames = 3;
     bool _renderingHooked;
@@ -399,6 +400,11 @@ public sealed partial class ModelViewport : UserControl
             return true;
         }
 
+        if (HandleCollectionKey(key, modifiers))
+        {
+            return true;
+        }
+
         bool ctrl = (modifiers & ModifierKeys.Control) != 0;
         if (key == Key.A && modifiers == ModifierKeys.Shift)
         {
@@ -630,7 +636,18 @@ public sealed partial class ModelViewport : UserControl
         int wantH = Math.Max(1, (int)Math.Round(ActualHeight * dpiNow.DpiScaleY));
         if (_resizePending || _d3dImage.PixelWidth != wantW || _d3dImage.PixelHeight != wantH)
         {
+            // Throttle back-buffer recreation while the window border is dragged: until the next resize
+            // the last frame stays on screen, stretched by the Image (no white / empty frames).
+            long now = Environment.TickCount64;
+            bool first = _renderer.ColorTexture == null || _d3dImage.PixelWidth <= 1;
+            if (!first && now - _lastResizeTick < 100)
+            {
+                _dirty = true;
+                return;
+            }
+
             ResizeSurface();
+            _lastResizeTick = now;
             _resizePending = false;
         }
 

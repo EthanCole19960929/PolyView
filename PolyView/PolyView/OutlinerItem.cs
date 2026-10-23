@@ -14,6 +14,10 @@ public enum OutlinerKind
     Camera,
     Light,
     Empty,
+    /// <summary>Mesh data-block row under an object (green icon), Blender's object/data split.</summary>
+    MeshDataRow,
+    /// <summary>Material slot row under a mesh data row.</summary>
+    Material,
 }
 
 /// <summary>One outliner row. Icons are vector geometry (Blender 4.2 look): orange object icon, teal data icon.</summary>
@@ -21,6 +25,9 @@ public sealed class OutlinerItem : INotifyPropertyChanged
 {
     static readonly Brush Orange = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0x9A, 0x4B)));
     static readonly Brush Teal = Freeze(new SolidColorBrush(Color.FromRgb(0x55, 0xC7, 0xA6)));
+    static readonly Brush Green = Freeze(new SolidColorBrush(Color.FromRgb(0x7B, 0xC8, 0x5A)));
+    static readonly Brush MaterialRed = Freeze(new SolidColorBrush(Color.FromRgb(0xE0, 0x6C, 0x6C)));
+    static readonly Geometry MaterialBall = G("M8,2.5 A5.5,5.5 0 1 1 7.99,2.5 Z");
     static readonly Brush White = Freeze(new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)));
 
     static readonly Geometry CollectionBox = G("M2,4.5 L8,1.5 L14,4.5 L14,11.5 L8,14.5 L2,11.5 Z M2,4.5 L8,7.5 L14,4.5 M8,7.5 L8,14.5");
@@ -58,7 +65,36 @@ public sealed class OutlinerItem : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public OutlinerKind Kind { get; }
-    public string Name { get; }
+    public string Name { get; private set; }
+
+    /// <summary>Collection behind a Scene / Collection row.</summary>
+    public SceneCollection? Collection { get; set; }
+
+    public bool IsDataRow => Kind is OutlinerKind.MeshDataRow or OutlinerKind.Material;
+
+    bool _editing;
+
+    public bool IsEditing
+    {
+        get => _editing;
+        set
+        {
+            _editing = value;
+            Raise(nameof(IsEditing));
+            Raise(nameof(EditVisibility));
+            Raise(nameof(NameVisibility));
+        }
+    }
+
+    public Visibility EditVisibility => _editing ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility NameVisibility => _editing ? Visibility.Hidden : Visibility.Visible;
+
+    public void SetName(string name)
+    {
+        Name = name;
+        Raise(nameof(Name));
+    }
 
     /// <summary>Object id (object / node rows); negative for Scene Collection and Collection.</summary>
     public int ObjectId { get; }
@@ -138,6 +174,11 @@ public sealed class OutlinerItem : INotifyPropertyChanged
             }
 
             _expanded = value;
+            if (Collection != null)
+            {
+                Collection.Expanded = value;
+            }
+
             Raise(nameof(Expanded));
             _owner.Flatten();
         }
@@ -157,6 +198,7 @@ public sealed class OutlinerItem : INotifyPropertyChanged
         OutlinerKind.Mesh => MeshObject,
         OutlinerKind.Camera => CameraObject,
         OutlinerKind.Light => LightObject,
+        OutlinerKind.Material => MaterialBall,
         _ => null,
     };
 
@@ -164,12 +206,19 @@ public sealed class OutlinerItem : INotifyPropertyChanged
     {
         OutlinerKind.Scene or OutlinerKind.Collection => CollectionBox,
         OutlinerKind.Empty => EmptyObject,
+        OutlinerKind.MeshDataRow => MeshData,
         _ => null,
     };
 
-    public Brush IconBrush => Kind is OutlinerKind.Scene or OutlinerKind.Collection ? White : Orange;
+    public Brush IconBrush => Kind switch
+    {
+        OutlinerKind.Scene or OutlinerKind.Collection => White,
+        OutlinerKind.MeshDataRow => Green,
+        OutlinerKind.Material => MaterialRed,
+        _ => Orange,
+    };
 
-    public Geometry? DataIcon => Kind switch
+    public Geometry? DataIcon => IsDataRow ? null : Kind switch
     {
         OutlinerKind.Mesh => MeshData,
         OutlinerKind.Camera => CameraData,
@@ -185,7 +234,7 @@ public sealed class OutlinerItem : INotifyPropertyChanged
 
     public Visibility CheckMarkVisibility => _included ? Visibility.Visible : Visibility.Hidden;
 
-    public Visibility ToggleVisibility => ObjectId >= 0 || IsCollection ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ToggleVisibility => (ObjectId >= 0 && !IsDataRow) || IsCollection ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>Collection "exclude from view layer" checkbox.</summary>
     public bool Included
@@ -273,7 +322,7 @@ public sealed class OutlinerItem : INotifyPropertyChanged
 
     public Geometry EyeData => _visible ? EyeOpen : EyeClosed;
 
-    public double RowOpacity => (IsCollection ? _included : _visible && !_inheritedOff) ? 1.0 : 0.4;
+    public double RowOpacity => (IsCollection ? _included && !_inheritedExcluded : _visible && !_inheritedOff) ? 1.0 : 0.4;
 
     public double ToggleOpacity => _inheritedExcluded ? 0.25 : _inheritedOff ? 0.5 : _visible ? 1.0 : 0.55;
 
@@ -318,4 +367,4 @@ public sealed class OutlinerItem : INotifyPropertyChanged
         brush.Freeze();
         return brush;
     }
-}
+}

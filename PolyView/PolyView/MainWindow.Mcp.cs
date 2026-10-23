@@ -48,10 +48,11 @@ public partial class MainWindow
                 bounds_min = V(info.Min),
                 bounds_max = V(info.Max),
                 source = info.SourcePath,
+                collection = Outliner.Root.FindOwner(id)?.Name,
             });
         }
 
-        return new { ok = true, shading = ShadingName(Viewport.Shading), selected = Viewport.SelectedId, project = _projectPath, objects };
+        return new { ok = true, shading = ShadingName(Viewport.Shading), selected = Viewport.SelectedId, project = _projectPath, objects, collections = Outliner.DescribeCollections() };
     }
 
     static string LightName(SceneLightType t) => t switch

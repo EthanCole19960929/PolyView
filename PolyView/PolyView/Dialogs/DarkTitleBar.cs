@@ -19,11 +19,25 @@ public static class DarkTitleBar
         else w.SourceInitialized += (_, _) => Set(w);
     }
 
+    [DllImport("gdi32.dll")]
+    static extern IntPtr CreateSolidBrush(int color);
+
+    [DllImport("user32.dll", EntryPoint = "SetClassLongPtrW")]
+    static extern IntPtr SetClassLongPtr(IntPtr hwnd, int index, IntPtr value);
+
+    const int GCLP_HBRBACKGROUND = -10;
+    static IntPtr _darkBrush;
+
     static void Set(Window w)
     {
         try
         {
             var h = new WindowInteropHelper(w).Handle;
+            // No white flash while resizing: dark Win32 class brush and dark WPF composition background.
+            if (_darkBrush == IntPtr.Zero) _darkBrush = CreateSolidBrush(0x1D1D1D);
+            SetClassLongPtr(h, GCLP_HBRBACKGROUND, _darkBrush);
+            if (HwndSource.FromHwnd(h)?.CompositionTarget is { } target)
+                target.BackgroundColor = System.Windows.Media.Color.FromRgb(0x1D, 0x1D, 0x1D);
             int on = 1;
             if (DwmSetWindowAttribute(h, DWMWA_USE_IMMERSIVE_DARK_MODE, ref on, 4) != 0)
                 DwmSetWindowAttribute(h, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref on, 4);

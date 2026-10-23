@@ -141,7 +141,7 @@
                      Background="#FF282828"
                      BorderThickness="0"
                      Foreground="#FFDADADA"
-                     SelectionMode="Single"
+                     SelectionMode="Extended"
                      AlternationCount="2"
                      HorizontalContentAlignment="Stretch"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -220,7 +220,7 @@
                                 <Path Data="{Binding IconStroke}" Stroke="{Binding IconBrush}" StrokeThickness="1.2"
                                       StrokeLineJoin="Round" Stretch="None"/>
                             </Grid>
-                            <TextBlock Grid.Column="3" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                            <TextBlock Grid.Column="3" Text="{Binding Name}" TextTrimming="CharacterEllipsis" Visibility="{Binding NameVisibility}"
                                        VerticalAlignment="Center" Margin="3,0,4,0" Opacity="{Binding RowOpacity}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -233,6 +233,11 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
+                            <TextBox Grid.Column="3" Grid.ColumnSpan="2" Visibility="{Binding EditVisibility}" Margin="1,2,4,2"
+                                     Background="#FF1D1D1D" Foreground="#FFFFFFFF" BorderBrush="#FF4772B3" BorderThickness="1"
+                                     CaretBrush="White" VerticalContentAlignment="Center" Padding="2,0"
+                                     IsVisibleChanged="RenameBox_IsVisibleChanged" KeyDown="RenameBox_KeyDown"
+                                     LostKeyboardFocus="RenameBox_LostFocus"/>
                             <Path Grid.Column="4" Data="{Binding DataIcon}" Stroke="#FF55C7A6" Fill="{Binding DataFill}" StrokeThickness="1.1"
                                   StrokeLineJoin="Round" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"
                                   HorizontalAlignment="Left" Opacity="{Binding RowOpacity}"/>

@@ -48,6 +48,7 @@ public partial class OutlinerPanel : UserControl
             _transformBoxes[i] = box;
         }
 
+        InitCollectionsUi();
         ApplyLanguage();
     }
 
@@ -56,6 +57,7 @@ public partial class OutlinerPanel : UserControl
         _viewport = viewport;
         viewport.SceneChanged += (_, _) => Rebuild();
         viewport.SelectionChanged += (_, _) => SyncFromViewport();
+        viewport.MoveToCollectionRequested += (_, link) => ShowMoveToCollectionMenu(SelectedObjectIds(), viewport, link);
         viewport.ObjectChanged += (_, id) =>
         {
             if (_applying)
@@ -69,7 +71,7 @@ public partial class OutlinerPanel : UserControl
                 {
                     if (item.NodeIndex < 0)
                     {
-                        if (_collIncluded && _collVisible && viewport.TryGetObjectInfo(id, out var info))
+                        if ((Root.FindOwner(id)?.EffectiveShown ?? true) && viewport.TryGetObjectInfo(id, out var info))
                         {
                             _ownVisible[id] = info.Visible;
                             item.SetVisibleSilently(info.Visible);
@@ -131,85 +133,118 @@ public partial class OutlinerPanel : UserControl
         var collapsed = new HashSet<(int, int)>();
         foreach (var item in AllItems())
         {
-            (item.Expanded ? expanded : collapsed).Add((item.ObjectId, item.NodeIndex));
+            if (item.Collection == null)
+            {
+                (item.Expanded ? expanded : collapsed).Add((item.ObjectId, item.NodeIndex));
+            }
         }
 
+        SyncMembership();
         _roots.Clear();
-        var scene = new OutlinerItem(this, OutlinerKind.Scene, UiText.OutlinerScene, SpecialId, -1);
-        var collection = new OutlinerItem(this, OutlinerKind.Collection, "Collection", SpecialId - 1, -1);
-        collection.InitCollection(_collIncluded, _collVisible, _collRenderable);
-        _collection = collection;
-        scene.Add(collection);
-        foreach (int id in _viewport.ObjectIds)
-        {
-            if (!_viewport.TryGetObjectInfo(id, out var info))
-            {
-                continue;
-            }
-
-            if (!_ownVisible.ContainsKey(id))
-            {
-                _ownVisible[id] = info.Visible;
-            }
-
-            var viewport = _viewport;
-            var nodes = _viewport.GetNodes(id);
-            var file = new OutlinerItem(this, FileKind(nodes), info.Name, id, -1, v =>
-            {
-                _ownVisible[id] = v;
-                ApplyCollection();
-            });
-            file.SetVisibleSilently(_ownVisible[id]);
-            file.SetRenderableSilently(!_renderOff.Contains((id, -1)));
-            collection.Add(file);
-            var created = new OutlinerItem[nodes.Count];
-            for (int i = 0; i < nodes.Count; i++)
-            {
-                var node = nodes[i];
-                int nodeIndex = node.Index;
-                var item = new OutlinerItem(this, KindOf(node.Kind), NodeName(node), id, nodeIndex, v => viewport.SetNodeVisible(id, nodeIndex, v));
-                item.SetVisibleSilently(_viewport.IsNodeVisible(id, nodeIndex));
-                item.SetRenderableSilently(!_renderOff.Contains((id, nodeIndex)));
-                created[i] = item;
-                var parent = node.Parent >= 0 && node.Parent < i ? created[node.Parent] : file;
-                parent.Add(item);
-            }
-
-            // A single childless root node of the same kind as the object is not repeated as an extra level.
-            if (file.Children.Count == 1 && file.Children[0].Children.Count == 0 && file.Children[0].Kind == file.Kind)
-            {
-                file.Children.Clear();
-            }
-        }
-
+        var scene = new OutlinerItem(this, OutlinerKind.Scene, UiText.OutlinerScene, CollectionRowId(Root), -1) { Collection = Root };
+        BuildCollection(scene, Root);
         _roots.Add(scene);
         foreach (var item in AllItems())
         {
+            if (item.Collection != null)
+            {
+                item.SetExpandedSilently(item.Kind == OutlinerKind.Scene || item.Collection.Expanded);
+                continue;
+            }
+
             var key = (item.ObjectId, item.NodeIndex);
-            item.SetExpandedSilently(collapsed.Contains(key) ? false
-                : expanded.Contains(key) || item.Kind is OutlinerKind.Scene or OutlinerKind.Collection);
+            item.SetExpandedSilently(!collapsed.Contains(key) && expanded.Contains(key));
         }
 
         ApplyCollection();
         Flatten();
     }
 
+    static int CollectionRowId(SceneCollection c) => -2000 - c.Id;
+
+    void BuildCollection(OutlinerItem row, SceneCollection collection)
+    {
+        foreach (var child in collection.Children)
+        {
+            var item = new OutlinerItem(this, OutlinerKind.Collection, child.Name, CollectionRowId(child), -1) { Collection = child };
+            item.InitCollection(child.Included, child.Visible, child.Renderable);
+            row.Add(item);
+            BuildCollection(item, child);
+        }
+
+        foreach (int id in collection.Objects)
+        {
+            BuildObject(row, id);
+        }
+    }
+
+    void BuildObject(OutlinerItem parentRow, int id)
+    {
+        if (_viewport == null || !_viewport.TryGetObjectInfo(id, out var info))
+        {
+            return;
+        }
+
+        if (!_ownVisible.ContainsKey(id))
+        {
+            _ownVisible[id] = info.Visible;
+        }
+
+        var viewport = _viewport;
+        var nodes = _viewport.GetNodes(id);
+        var file = new OutlinerItem(this, FileKind(nodes), info.Name, id, -1, v =>
+        {
+            _ownVisible[id] = v;
+            ApplyCollection();
+        });
+        file.SetVisibleSilently(_ownVisible[id]);
+        file.SetRenderableSilently(!_renderOff.Contains((id, -1)));
+        parentRow.Add(file);
+        var created = new OutlinerItem[nodes.Count];
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var node = nodes[i];
+            int nodeIndex = node.Index;
+            var item = new OutlinerItem(this, KindOf(node.Kind), NodeName(node), id, nodeIndex, v => viewport.SetNodeVisible(id, nodeIndex, v));
+            item.SetVisibleSilently(_viewport.IsNodeVisible(id, nodeIndex));
+            item.SetRenderableSilently(!_renderOff.Contains((id, nodeIndex)));
+            created[i] = item;
+            var parent = node.Parent >= 0 && node.Parent < i ? created[node.Parent] : file;
+            parent.Add(item);
+        }
+
+        // A single childless root node of the same kind as the object is not repeated as an extra level.
+        if (file.Children.Count == 1 && file.Children[0].Children.Count == 0 && file.Children[0].Kind == file.Kind)
+        {
+            file.Children.Clear();
+        }
+
+        // Blender object / data split: the mesh data-block (green) and its materials sit under the object row.
+        if (file.Kind == OutlinerKind.Mesh && file.Children.Count == 0)
+        {
+            var data = new OutlinerItem(this, OutlinerKind.MeshDataRow, _viewport.GetMeshDataName(id), id, -2);
+            file.Add(data);
+            int materials = _viewport.GetMaterialCount(id);
+            for (int m = 0; m < materials; m++)
+            {
+                data.Add(new OutlinerItem(this, OutlinerKind.Material, m == 0 ? "Material" : $"Material.{m:000}", id, -3 - m));
+            }
+        }
+    }
+
     // ---------------- Collection toggles (exclude / hide / disable in renders) ----------------
 
     readonly Dictionary<int, bool> _ownVisible = [];
     readonly HashSet<(int, int)> _renderOff = [];
-    OutlinerItem? _collection;
-    bool _collIncluded = true;
-    bool _collVisible = true;
-    bool _collRenderable = true;
     bool _applying;
 
     internal void OnRenderableChanged(OutlinerItem item)
     {
-        if (item.Kind == OutlinerKind.Collection)
+        if (item.Collection is { } c)
         {
-            _collRenderable = item.Renderable;
+            c.Renderable = item.Renderable;
             ApplyCollection();
+            OnCollectionsChanged();
             return;
         }
 
@@ -223,30 +258,51 @@ public partial class OutlinerPanel : UserControl
         }
     }
 
-    internal void OnCollectionToggled(OutlinerItem collection)
+    internal void OnCollectionToggled(OutlinerItem row)
     {
-        _collIncluded = collection.Included;
-        _collVisible = collection.Visible;
-        _collRenderable = collection.Renderable;
-        ApplyCollection();
-    }
-
-    /// <summary>Pushes the collection state to the viewport: an excluded or hidden collection hides (and makes unpickable) every child object.</summary>
-    internal void ApplyCollection()
-    {
-        if (_viewport == null || _collection == null)
+        if (row.Collection is not { } c)
         {
             return;
         }
 
-        bool shown = _collIncluded && _collVisible;
+        c.Included = row.Included;
+        c.Visible = row.Visible;
+        c.Renderable = row.Renderable;
+        ApplyCollection();
+        OnCollectionsChanged();
+    }
+
+    /// <summary>Pushes collection state to the viewport: an excluded or hidden collection hides (and makes unpickable) every object below it.</summary>
+    internal void ApplyCollection()
+    {
+        if (_viewport == null)
+        {
+            return;
+        }
+
+        var owner = new Dictionary<int, SceneCollection>();
         _applying = true;
         try
         {
-            foreach (var file in _collection.Children)
+            var shownIds = new Dictionary<int, bool>();
+            foreach (var c in Root.SelfAndDescendants())
             {
-                bool own = _ownVisible.TryGetValue(file.ObjectId, out var v) ? v : true;
-                _viewport.SetObjectVisible(file.ObjectId, own && shown);
+                bool shown = c.EffectiveShown;
+                foreach (int id in c.Objects)
+                {
+                    if (!owner.TryGetValue(id, out var prev) || (shown && !prev.EffectiveShown))
+                    {
+                        owner[id] = c;
+                    }
+
+                    shownIds[id] = shownIds.GetValueOrDefault(id) || shown;
+                }
+            }
+
+            foreach (var (id, shown) in shownIds)
+            {
+                bool own = _ownVisible.TryGetValue(id, out var v) ? v : true;
+                _viewport.SetObjectVisible(id, own && shown);
             }
         }
         finally
@@ -254,9 +310,16 @@ public partial class OutlinerPanel : UserControl
             _applying = false;
         }
 
-        foreach (var file in _collection.Children)
+        foreach (var item in AllItems())
         {
-            SetInherited(file, !shown, !_collIncluded, !_collRenderable);
+            if (item.Collection is { Parent: { } p })
+            {
+                item.SetInherited(!p.EffectiveShown, p.EffectiveExcluded, p.EffectiveRenderOff);
+            }
+            else if (item.ObjectId >= 0 && owner.TryGetValue(item.ObjectId, out var c))
+            {
+                item.SetInherited(!c.EffectiveShown, c.EffectiveExcluded, c.EffectiveRenderOff);
+            }
         }
 
         _viewport.Invalidate();
@@ -325,7 +388,7 @@ public partial class OutlinerPanel : UserControl
 
     internal void Flatten()
     {
-        var selected = ItemList.SelectedItem as OutlinerItem;
+        var selectedKeys = ItemList.SelectedItems.OfType<OutlinerItem>().Select(RowKey).ToHashSet();
         _syncing = true;
         _rows.Clear();
         foreach (var root in _roots)
@@ -333,13 +396,13 @@ public partial class OutlinerPanel : UserControl
             Add(root, 0);
         }
 
-        if (selected != null)
+        if (selectedKeys.Count > 0)
         {
             foreach (var row in _rows)
             {
-                if (row.ObjectId == selected.ObjectId && row.NodeIndex == selected.NodeIndex)
+                if (selectedKeys.Contains(RowKey(row)))
                 {
-                    ItemList.SelectedItem = row;
+                    ItemList.SelectedItems.Add(row);
                 }
             }
         }
@@ -384,6 +447,10 @@ public partial class OutlinerPanel : UserControl
 
         int id = _viewport.SelectedId;
         int node = _viewport.SelectedNode;
+        if (id >= 0 && Root.FindOwner(id) is { } owner)
+        {
+            _active = owner;
+        }
         OutlinerItem? target = null;
         if (id >= 0)
         {
@@ -405,7 +472,13 @@ public partial class OutlinerPanel : UserControl
         }
 
         _syncing = true;
-        ItemList.SelectedItem = target;
+        // Keep a multi-selection when the viewport's active object is already part of it.
+        bool keep = target != null && ItemList.SelectedItems.OfType<OutlinerItem>().Any(r => RowKey(r) == RowKey(target));
+        if (!keep)
+        {
+            ItemList.SelectedItem = target;
+        }
+
         if (target != null)
         {
             ItemList.ScrollIntoView(target);
@@ -422,11 +495,24 @@ public partial class OutlinerPanel : UserControl
             return;
         }
 
-        var item = ItemList.SelectedItem as OutlinerItem;
+        // Active row = the one just clicked (Extended selection: Ctrl toggles, Shift selects a range).
+        var item = e.AddedItems.Count > 0 ? e.AddedItems[^1] as OutlinerItem
+            : ItemList.SelectedItems.Count > 0 ? ItemList.SelectedItems[^1] as OutlinerItem : null;
+        if (e.AddedItems.Count == 0 && e.RemovedItems.Count > 0 && ItemList.SelectedItems.Count > 0)
+        {
+            return;
+        }
+
         _syncing = true;
+        if (item?.Collection != null)
+        {
+            _active = item.Collection;
+        }
+
         if (item != null && item.ObjectId >= 0)
         {
-            _viewport.SelectNode(item.ObjectId, item.NodeIndex);
+            _active = Root.FindOwner(item.ObjectId) ?? _active;
+            _viewport.SelectNode(item.ObjectId, item.IsDataRow ? -1 : item.NodeIndex);
         }
         else
         {

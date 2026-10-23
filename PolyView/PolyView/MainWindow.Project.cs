@@ -22,6 +22,7 @@ public partial class MainWindow
     {
         Viewport.SceneChanged += (_, _) => MarkProjectDirty();
         Viewport.ObjectChanged += (_, _) => MarkProjectDirty();
+        Outliner.CollectionsChanged += (_, _) => MarkProjectDirty();
         Closing += OnProjectClosing;
         FileAssociation.EnsureRegistered();
         MenuSave.IsEnabled = true;
