@@ -15,8 +15,6 @@ public sealed class ModelViewport : UserControl
 {
     readonly Image _image = new() { Stretch = Stretch.Fill };
     readonly D3DImage _d3dImage = new();
-    readonly DispatcherTimer _fpsTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
-    readonly System.Diagnostics.Stopwatch _fpsWatch = new();
     SceneRenderer? _renderer;
     D3D9.IDirect3D9Ex? _d3d9;
     D3D9.IDirect3DDevice9Ex? _device9;
@@ -31,15 +29,10 @@ public sealed class ModelViewport : UserControl
     bool _dirty = true;
     bool _renderingHooked;
     string? _failure;
-    int _framesInWindow;
-    double _renderMsInWindow;
     BenchState? _bench;
 
     /// <summary>模型、错误信息变化时触发（不是每帧）。</summary>
     public event EventHandler? ViewChanged;
-
-    /// <summary>帧率统计更新时触发，约每 0.4 秒一次。</summary>
-    public event EventHandler? StatsChanged;
 
     public string MeshName => _mesh?.Name ?? "";
     public int VertexCount => _mesh?.Vertices.Length ?? 0;
@@ -48,12 +41,6 @@ public sealed class ModelViewport : UserControl
     public string? Failure => _failure;
     public bool HasMesh => _mesh != null;
     public bool Orthographic => _camera.Orthographic;
-
-    /// <summary>最近约 0.4 秒内的平均帧率；0 表示这段时间没有重画（空闲）。</summary>
-    public double FramesPerSecond { get; private set; }
-
-    /// <summary>最近一段时间里每帧提交渲染命令的平均 CPU 耗时（毫秒）。</summary>
-    public double FrameMilliseconds { get; private set; }
 
     /// <summary>上一次打开模型时，读取 + 解析文件的耗时（毫秒）。</summary>
     public double LastLoadMilliseconds { get; private set; }
@@ -85,7 +72,6 @@ public sealed class ModelViewport : UserControl
                 Invalidate();
             }
         };
-        _fpsTimer.Tick += OnFpsTick;
     }
 
     /// <summary>请求下一帧重画。画面没变化时不渲染，CPU / GPU 空闲。</summary>
@@ -250,8 +236,6 @@ public sealed class ModelViewport : UserControl
                 _renderingHooked = true;
             }
 
-            _fpsWatch.Restart();
-            _fpsTimer.Start();
             Invalidate();
         }
         catch (Exception ex)
@@ -269,7 +253,6 @@ public sealed class ModelViewport : UserControl
             _renderingHooked = false;
         }
 
-        _fpsTimer.Stop();
         _sharedTexture?.Dispose();
         _device9?.Dispose();
         _d3d9?.Dispose();
@@ -305,13 +288,10 @@ public sealed class ModelViewport : UserControl
         }
 
         _dirty = false;
-        long start = System.Diagnostics.Stopwatch.GetTimestamp();
         RenderFrame();
         _d3dImage.Lock();
         _d3dImage.AddDirtyRect(new Int32Rect(0, 0, _d3dImage.PixelWidth, _d3dImage.PixelHeight));
         _d3dImage.Unlock();
-        _renderMsInWindow += System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-        _framesInWindow++;
         _bench?.Frame(this);
     }
 
@@ -319,24 +299,6 @@ public sealed class ModelViewport : UserControl
     {
         float radius = _mesh == null ? 1f : (_mesh.Max - _mesh.Min).Length() * 0.5f;
         _renderer!.Render(_camera, _scale, radius);
-    }
-
-    void OnFpsTick(object? sender, EventArgs e)
-    {
-        double seconds = _fpsWatch.Elapsed.TotalSeconds;
-        _fpsWatch.Restart();
-        double fps = seconds > 0 ? _framesInWindow / seconds : 0;
-        double ms = _framesInWindow > 0 ? _renderMsInWindow / _framesInWindow : 0;
-        _framesInWindow = 0;
-        _renderMsInWindow = 0;
-        if (Math.Abs(fps - FramesPerSecond) < 0.05 && Math.Abs(ms - FrameMilliseconds) < 0.05)
-        {
-            return;
-        }
-
-        FramesPerSecond = fps;
-        FrameMilliseconds = ms;
-        StatsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     void ResizeSurface()

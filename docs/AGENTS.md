@@ -134,7 +134,7 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 ## 当前进度（2026-10-23）
 
 - 已在 master：OBJ / STL / GLB / glTF 导入，拖放打开，命令行打开，修复视口全黑（矩阵转置），中英文切换。
-- `feat/import-xiaoB` 分支（已推送，等 Ethan 合并）：Models 平铺（bf3fd7b）、文档整理（c6a515c）、合并 master（e7a1015）；代码提交：Assimp 导入 FBX / DAE、three.js JSON、GLB 的 Draco 解码和 WebP 贴图、Blender 式导航、地面网格、按需渲染和 FPS、去掉「X 拉伸」滑块、相机跟随光照、`--bench` 性能测试、docs/04。
+- `feat/import-xiaoB` 分支（已推送，等 Ethan 合并）：Models 平铺（bf3fd7b）、文档整理（c6a515c）、合并 master（e7a1015）；代码提交：Assimp 导入 FBX / DAE、three.js JSON、GLB 的 Draco 解码和 WebP 贴图、Blender 式导航、地面网格、按需渲染、去掉「X 拉伸」和「缩放」滑块、去掉界面上的 FPS 显示、相机跟随光照、`--bench` 性能测试、docs/04。
 - 下一步：小C 按下面的验收标准逐项验收；内存反复开关测试；拾取和场景树（第 2 阶段）交给小U。
 
 ## 验收标准与已知坑
@@ -152,9 +152,9 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 - 拖拽：AllowDrop=True，Background=Transparent，在 DragOver 里把 Effects 设成 Copy，读取 DataFormats.FileDrop。以管理员身份运行时 Windows 会拦截拖拽，属于正常现象。
 - 打开对话框的过滤器要包含 *.glb;*.gltf。
 - 遇到不支持的格式，在状态栏提示，不能让程序崩溃。
-- 「复位视角」要把相机和滑块都恢复成默认值（缩放为 1）。
+- 「复位视角」要把相机恢复成默认值（缩放为 1）。
 ### FPS
-- 显示「帧率 xx FPS」，按约 0.5 秒取平均，不要每帧都新建字符串。CompositionTarget.Rendering 会把帧率限制在显示器刷新率（约 60）。
+- 界面上不显示 FPS（按用户要求已去掉）。需要看帧率和 GPU 耗时时用 `--bench`。渲染只在需要时进行，静止时不占 GPU。
 ### 每次提交的验收
 - Models 里的每个模型都能打开，也能拖进窗口。同一个模型的几种格式打开后，亮度、大小、朝向要一致。
 - 窗口缩放时模型不能变形。150% DPI 下画面要清晰。
@@ -173,7 +173,7 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 - **每帧分配：** `Marshal.StructureToPtr` 会装箱，每帧产生垃圾；常量缓冲改成指针直接写。
 - **Assimp 原生库：** 自带的 assimp 6.0.2 没有导出 `aiGetEmbeddedTexture`，内嵌贴图要自己按 `*N` 或文件名去 `scene->mTextures` 里找。
 - **`[Oo]bj/` 忽略规则：** 会把名叫 `obj` 的模型子目录也忽略掉，之前 `watertower.obj` 因此没进仓库。
-- **FPS：** `CompositionTarget.Rendering` 跟着显示器刷新率走，帧率上限约等于刷新率；只在需要时渲染，静止时显示「空闲」，每约 0.5 秒统计一次，不每帧拼字符串。
+- **FPS：** `CompositionTarget.Rendering` 跟着显示器刷新率走，帧率上限约等于刷新率；只在需要时渲染。界面已不再显示 FPS。
 - **Draco 解码后的 min / max：** Draco 是量化压缩，解出来的坐标会略微超出 accessor 原来写的 min / max，SharpGLTF 读取时会校验并报错，所以重写 GLB 时要按解码结果重新算 min / max。
 - **draco_decoder.dll 依赖：** mingw 编出的 DLL 默认依赖 libgcc_s / libstdc++，Ethan 电脑上没有；CMake 的目标是 MODULE，要用 `CMAKE_MODULE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++"`，编完用 objdump 确认只依赖 KERNEL32 和 msvcrt。
-- **FPS 上限：** 状态栏 FPS 最多约等于显示器刷新率，看 GPU 真实负载用 `--bench` 的「GPU ms/帧」。
+- **FPS 上限：** `--bench` 测到的 vsync FPS 最多约等于显示器刷新率，看 GPU 真实负载用「GPU ms/帧」。

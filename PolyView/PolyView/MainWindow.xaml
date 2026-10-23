@@ -20,7 +20,7 @@
                 <Button x:Name="ResetButton" MinWidth="88" Margin="0,0,8,0" Padding="12,4" Click="ResetButton_Click"/>
                 <Button x:Name="LanguageButton" MinWidth="72" Margin="0,0,16,0" Padding="12,4" Click="LanguageButton_Click"/>
                 <TextBlock x:Name="StatusText" Foreground="#FFC8C8C8" VerticalAlignment="Center"/>
-                <TextBlock x:Name="FpsText" Foreground="#FF9AD08A" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="ProjectionText" Foreground="#FF9AD08A" Margin="16,0,0,0" VerticalAlignment="Center"/>
             </WrapPanel>
         </Border>
         <TextBlock x:Name="HintText" DockPanel.Dock="Bottom" Margin="12,8" Foreground="#FFB5B5B5"/>

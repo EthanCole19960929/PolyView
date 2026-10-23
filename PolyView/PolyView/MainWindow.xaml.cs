@@ -13,7 +13,6 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Viewport.ViewChanged += (_, _) => UpdateStatus();
-        Viewport.StatsChanged += (_, _) => UpdateFps();
         ApplyLanguage();
 
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
@@ -40,14 +39,12 @@ public partial class MainWindow : Window
         LanguageButton.Content = UiText.Language;
         HintText.Text = UiText.Hint;
         UpdateStatus();
-        UpdateFps();
+        UpdateProjection();
     }
 
-    void UpdateFps()
+    void UpdateProjection()
     {
-        // 只在统计窗口结束时（约每 0.4 秒）拼一次字符串，不是每帧。
-        string projection = Viewport.Orthographic ? UiText.Ortho : UiText.Perspective;
-        FpsText.Text = projection + "    " + UiText.Fps(Viewport.FramesPerSecond, Viewport.FrameMilliseconds);
+        ProjectionText.Text = Viewport.Orthographic ? UiText.Ortho : UiText.Perspective;
     }
 
     void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -60,7 +57,7 @@ public partial class MainWindow : Window
         if (Viewport.HandleKey(e.Key, Keyboard.Modifiers))
         {
             e.Handled = true;
-            UpdateFps();
+            UpdateProjection();
         }
     }
 
