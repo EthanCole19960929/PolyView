@@ -65,4 +65,9 @@ public static class UiText
     public static string PropVertices => Chinese ? "顶点" : "Vertices";
     public static string PropTriangles => Chinese ? "三角形" : "Triangles";
     public static string PropSize => Chinese ? "尺寸" : "Size";
-    public static string ToggleVisibility => Chinese ? "显示/隐藏" : "Show/Hide";}
+    public static string ToggleVisibility => Chinese ? "显示/隐藏" : "Show/Hide";
+    public static string LightPoint => Chinese ? "点光" : "Point";
+    public static string LightSun => Chinese ? "日光" : "Sun";
+    public static string LightSpot => Chinese ? "聚光" : "Spot";
+    public static string LightArea => Chinese ? "面光" : "Area";
+    public static string LightAmbient => Chinese ? "环境光" : "Ambient";}
