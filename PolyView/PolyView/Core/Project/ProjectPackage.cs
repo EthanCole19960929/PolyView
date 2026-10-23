@@ -8,6 +8,7 @@ namespace PolyView.Project;
 public static class ProjectPackage
 {
     public const string Extension = ".pvproj";
+    /// <summary>Old backup extension; only used to clean up the file association of earlier builds.</summary>
     public const string BackupExtension = ".pvproj1";
     const string ManifestEntry = "project.json";
     const string ThumbnailEntry = "thumbnail.png";
@@ -17,12 +18,10 @@ public static class ProjectPackage
         ".mtl", ".bin", ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".ktx2", ".webp", ".tif", ".tiff",
     };
 
-    /// <summary>.pvproj, or its .pvproj1 backup (same format).</summary>
     public static bool IsProjectFile(string path) =>
-        string.Equals(Path.GetExtension(path), Extension, StringComparison.OrdinalIgnoreCase)
-        || string.Equals(Path.GetExtension(path), BackupExtension, StringComparison.OrdinalIgnoreCase);
+        string.Equals(Path.GetExtension(path), Extension, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Turns whatever the dialog returned into "&lt;folder&gt;\&lt;name&gt;.pvproj" (never a folder, never a .pvproj1).</summary>
+    /// <summary>Turns whatever the dialog returned into "&lt;folder&gt;\&lt;name&gt;.pvproj" (never a folder).</summary>
     public static string NormalizeSavePath(string path, string fallbackName)
     {
         path = Path.GetFullPath(path.Trim());
@@ -60,7 +59,7 @@ public static class ProjectPackage
         return list;
     }
 
-    /// <summary>Writes the package to a temp file, keeps the old file as .pvproj1, then moves the temp file into place.</summary>
+    /// <summary>Writes the package to a temp file in the same folder, checks it, then moves it over the target file (the temp file is always removed).</summary>
     public static void Write(string path, ProjectDocument doc, byte[]? thumbnailPng, ProjectSaveOptions options)
     {
         path = Path.GetFullPath(path);
@@ -108,20 +107,8 @@ public static class ProjectPackage
                 }
             }
 
-            if (File.Exists(path))
-            {
-                // Overwriting: keep the previous version as <name>.pvproj1, then move the new file into place.
-                if (options.KeepBackup)
-                {
-                    File.Copy(path, Path.ChangeExtension(path, BackupExtension), overwrite: true);
-                }
-
-                File.Move(temp, path, overwrite: true);
-            }
-            else
-            {
-                File.Move(temp, path);
-            }
+            // Overwrite the same file in place. No backup copies, no extra files.
+            File.Move(temp, path, overwrite: true);
         }
         finally
         {

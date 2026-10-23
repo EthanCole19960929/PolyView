@@ -244,10 +244,9 @@ public partial class MainWindow
                 _restoring = false;
             }
 
-            // Opening a .pvproj1 backup: Save goes to the matching .pvproj, not over the backup.
-            _projectPath = Path.ChangeExtension(path, ProjectPackage.Extension);
+            _projectPath = path;
             _projectDirty = false;
-            RememberProject(_projectPath);
+            RememberProject(path);
             UpdateProjectTitle();
             UpdateProjection();
             ShowNotice(UiText.ProjectOpened(Path.GetFileName(path)));

@@ -30,16 +30,11 @@ public static class ProjectSelfTest
             var before = a.CaptureProject();
             var file = Path.Combine(dir, "selftest" + ProjectPackage.Extension);
             ProjectPackage.Write(file, before, null, ProjectSaveOptions.Default);
-            ProjectPackage.Write(file, before, null, ProjectSaveOptions.Default); // second save -> .pvproj1 backup
-            log.Add($"saved {file} ({new FileInfo(file).Length} bytes), backup exists: {File.Exists(Path.ChangeExtension(file, ProjectPackage.BackupExtension))}");
-
-            var backup = Path.ChangeExtension(file, ProjectPackage.BackupExtension);
-            var backupDoc = ProjectPackage.Read(backup).Doc;
-            bool backupOk = ProjectPackage.IsProjectFile(backup) && backupDoc.Objects.Count == before.Objects.Count;
-            var leftovers = Directory.GetFileSystemEntries(dir).Select(Path.GetFileName).Where(n => n!.EndsWith(".saving") || Directory.Exists(Path.Combine(dir, n))).ToList();
-            string normDir = ProjectPackage.NormalizeSavePath(dir, "未命名"), normBak = ProjectPackage.NormalizeSavePath(backup, "x");
-            bool pathsOk = normDir == Path.Combine(dir, "未命名.pvproj") && normBak == file && leftovers.Count == 0 && backupOk;
-            log.Add($"backup opens: {backupOk}, leftovers: {leftovers.Count}, folder->{normDir}, pvproj1->{normBak}");
+            ProjectPackage.Write(file, before, null, ProjectSaveOptions.Default); // second save overwrites in place
+            var entries = Directory.GetFileSystemEntries(dir).Select(Path.GetFileName).Order().ToList();
+            string normDir = ProjectPackage.NormalizeSavePath(dir, "untitled");
+            bool pathsOk = entries.SequenceEqual(new[] { "box.stl", "selftest.pvproj" }) && normDir == Path.Combine(dir, "untitled.pvproj");
+            log.Add($"saved twice {file} ({new FileInfo(file).Length} bytes); folder now holds: {string.Join(", ", entries)}; folder->{normDir}");
             var (doc, assets, missing) = ProjectPackage.Read(file);
             var imports = ModelViewport.ImportProjectAssets(doc, assets);
             var b = new ModelViewport();

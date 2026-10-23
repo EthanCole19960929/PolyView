@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.IO;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace PolyView.Project;
@@ -28,10 +29,9 @@ public static class FileAssociation
             string command = $"\"{exe}\" \"%1\"";
             bool changed = false;
             changed |= Set(@"Software\Classes\" + ProjectPackage.Extension, null, ProgId);
-            changed |= Set(@"Software\Classes\" + ProjectPackage.BackupExtension, null, ProgId);
-            changed |= Set(@"Software\Classes\" + ProgId, null, "PolyView Project");
-            changed |= Set(@"Software\Classes\" + ProgId + @"\DefaultIcon", null, icon);
-            changed |= Set(@"Software\Classes\" + ProgId + @"\shell\open\command", null, command);
+            // Earlier builds registered .pvproj1 backups; backups are gone, so remove those keys.
+            changed |= Remove(@"Software\Classes\" + ProjectPackage.BackupExtension);
+            changed |= Remove(@"Software\Classes\PolyView.Backup");
             if (changed)
             {
                 SHChangeNotify(ShcneAssocChanged, 0, IntPtr.Zero, IntPtr.Zero);
@@ -41,6 +41,20 @@ public static class FileAssociation
         {
             App.LogException("FileAssociation", ex);
         }
+    }
+
+    static bool Remove(string keyPath)
+    {
+        using (var key = Registry.CurrentUser.OpenSubKey(keyPath))
+        {
+            if (key == null)
+            {
+                return false;
+            }
+        }
+
+        Registry.CurrentUser.DeleteSubKeyTree(keyPath, throwOnMissingSubKey: false);
+        return true;
     }
 
     static bool Set(string keyPath, string? name, string value)

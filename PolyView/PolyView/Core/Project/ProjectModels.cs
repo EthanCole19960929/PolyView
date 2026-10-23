@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace PolyView.Project;
 
@@ -94,7 +94,6 @@ public sealed class ProjectSaveOptions
 {
     public bool EmbedAssets { get; set; } = true;
     public bool WriteThumbnail { get; set; } = true;
-    public bool KeepBackup { get; set; } = true;
 
     public static ProjectSaveOptions Default => new();
 }
