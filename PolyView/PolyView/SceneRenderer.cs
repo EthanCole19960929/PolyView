@@ -131,7 +131,7 @@ public sealed class SceneRenderer : IDisposable
             }
 
             // 主光跟着相机（右上方斜照），再加天空 / 地面半球环境光，背光面也不会比背景还黑。
-            if (Ambient.w > 0.5)
+            if (abs(Ambient.w - 1) < 0.5)
             {
                 // Scene lights (docs/07 §4.2): Lambert + small Blinn-Phong, inverse-square falloff, no shadows.
                 float4 baseColor = BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
@@ -186,7 +186,7 @@ public sealed class SceneRenderer : IDisposable
 
             float key = saturate(dot(normal, LightDirection));
             float hemisphere = lerp(0.32, 0.55, normal.y * 0.5 + 0.5);
-            float4 albedo = BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
+            float4 albedo = abs(Ambient.w - 2) < 0.5 ? input.Color : BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
             float3 color = albedo.rgb * (hemisphere + 0.75 * key);
             return float4(saturate(color), 1);
         }
@@ -363,12 +363,12 @@ public sealed class SceneRenderer : IDisposable
     }
 
     /// <summary>Scene lights for the shader (docs/07). useSceneLights = false keeps the default viewport light.</summary>
-    public unsafe void SetLights(LightData[] lights, int count, Vector3 ambient, bool useSceneLights)
+    public unsafe void SetLights(LightData[] lights, int count, Vector3 ambient, float shadingCode)
     {
         count = Math.Clamp(count, 0, MaxLights);
         var mapped = _context.Map(_lightConstants, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
         var header = (Vector4*)mapped.DataPointer;
-        header[0] = new Vector4(ambient, useSceneLights ? 1f : 0f);
+        header[0] = new Vector4(ambient, shadingCode);
         header[1] = new Vector4(count, 0, 0, 0);
         var items = (LightData*)(header + 2);
         for (int i = 0; i < count; i++)

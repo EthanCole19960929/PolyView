@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -90,7 +90,7 @@ public sealed partial class ModelViewport
             ambient = DefaultAmbient;
         }
 
-        _renderer.SetLights(_lightData, count, ambient, useSceneLights: count > 0);
+        _renderer.SetLights(_lightData, count, ambient, ShadingCode);
         _renderer.SetLightIcons(_iconVertices, _iconCount);
     }
 

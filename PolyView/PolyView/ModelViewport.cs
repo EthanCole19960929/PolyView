@@ -408,7 +408,7 @@ public sealed partial class ModelViewport : UserControl
 
         if (key == Key.Z && modifiers == ModifierKeys.Shift)
         {
-            Wireframe = !Wireframe;
+            ToggleWireframeShading();
             return true;
         }
 

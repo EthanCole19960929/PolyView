@@ -81,6 +81,14 @@ public static class UiText
     public static string TransformRotation => Chinese ? "旋转" : "Rotation";
     public static string TransformScale => Chinese ? "缩放" : "Scale";
     public static string TipSelectName => Chinese ? "选择" : "Select";
+    public static string ShadeWireName => Chinese ? "\u7ebf\u6846" : "Wireframe";
+    public static string ShadeWire => Chinese ? "\u5207\u6362\u5230\u7ebf\u6846\u663e\u793a\u3002" : "Display only the edges of objects.";
+    public static string ShadeSolidName => Chinese ? "\u5b9e\u4f53" : "Solid";
+    public static string ShadeSolid => Chinese ? "\u7528\u5de5\u4f5c\u5ba4\u706f\u5149\u663e\u793a\u6a21\u578b\uff0c\u4e0d\u4f7f\u7528\u573a\u666f\u706f\u5149\u548c\u8d34\u56fe\u3002" : "Studio lighting, no scene lights or textures.";
+    public static string ShadeMaterialName => Chinese ? "\u6750\u8d28\u9884\u89c8" : "Material Preview";
+    public static string ShadeMaterial => Chinese ? "\u663e\u793a\u57fa\u7840\u8272\u8d34\u56fe\uff0c\u4f7f\u7528\u9ed8\u8ba4\u73af\u5883\u5149\u7167\u3002" : "Base color textures with default environment lighting.";
+    public static string ShadeRenderedName => Chinese ? "\u6e32\u67d3" : "Rendered";
+    public static string ShadeRendered => Chinese ? "\u4f7f\u7528\u573a\u666f\u706f\u5149\u548c\u4e16\u754c\u73af\u5883\u5149\u663e\u793a\u3002" : "Scene lights and World ambient.";
     public static string TipMoveName => Chinese ? "移动" : "Move";
     public static string TipRotateName => Chinese ? "旋转" : "Rotate";
     public static string TipScaleName => Chinese ? "缩放" : "Scale";

@@ -66,6 +66,7 @@ public partial class MainWindow : Window
         HintText.Text = UiText.Hint;
         Outliner.ApplyLanguage();
         Viewport.ApplyToolbarLanguage();
+        Viewport.ApplyShadingLanguage();
         UpdateStatus();
         UpdateProjection();
     }

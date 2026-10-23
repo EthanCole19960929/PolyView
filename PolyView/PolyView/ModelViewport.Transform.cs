@@ -100,6 +100,7 @@ public sealed partial class ModelViewport
         grid.Children.Add(group);
         grid.Children.Add(_modalText);
         grid.Children.Add(BuildNavGizmo());
+        grid.Children.Add(BuildShadingBar());
         ApplyToolbarLanguage();
         return grid;
     }
