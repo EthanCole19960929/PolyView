@@ -1,0 +1,149 @@
+<div align="center">
+
+# 🧊 PolyView
+
+**A lightweight, fast and good-looking 3D model viewer for Windows**
+
+Built with C# / WPF and Direct3D 11
+
+<p>
+  <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 10">
+  <img src="https://img.shields.io/badge/C%23-13-239120?style=for-the-badge&logo=csharp&logoColor=white" alt="C#">
+  <img src="https://img.shields.io/badge/WPF-Fluent_UI-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="WPF">
+  <img src="https://img.shields.io/badge/Direct3D-11-107C10?style=for-the-badge&logo=directx&logoColor=white" alt="Direct3D 11">
+  <br>
+  <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6?style=flat-square&logo=windows11" alt="Platform">
+  <img src="https://img.shields.io/badge/IDE-Visual%20Studio%202026-5C2D91?style=flat-square&logo=visualstudio" alt="Visual Studio 2026">
+  <img src="https://img.shields.io/badge/glTF-2.0-87C540?style=flat-square&logo=khronosgroup&logoColor=white" alt="glTF 2.0">
+  <img src="https://img.shields.io/badge/status-early%20development-orange?style=flat-square" alt="Status">
+  <img src="https://img.shields.io/badge/license-TBD-lightgrey?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs welcome">
+</p>
+
+**English** | [简体中文](README.zh-CN.md)
+
+[✨ Features](#-features) •
+[🛠️ Tech Stack](#️-tech-stack) •
+[🗺️ Roadmap](#️-roadmap) •
+[🚀 Getting Started](#-getting-started) •
+[📁 Structure](#-project-structure)
+
+</div>
+
+---
+
+> [!NOTE]
+> PolyView is in **early development (Phase 0)**. Features below are planned unless checked in the roadmap.
+
+## ✨ Features
+
+| | Feature | Description |
+| :---: | --- | --- |
+| 📂 | **Multi-format import** | glTF / GLB first, then OBJ and STL |
+| 🖱️ | **Smooth navigation** | Orbit, pan and zoom-to-cursor with the mouse |
+| 🎨 | **Shading modes** | Solid, wireframe and lit shading |
+| 🎯 | **Picking** | Click an object to see its name, vertex / triangle count and bounding box |
+| 🌙 | **Modern UI** | Fluent design, dark theme, dockable panels |
+| ⚡ | **Stable memory** | No memory spikes or stutter, even with large models |
+| 🖥️ | **High-DPI ready** | Crisp viewport at 100% / 150% / 200% scaling |
+
+## 🛠️ Tech Stack
+
+| Area | Choice |
+| --- | --- |
+| Runtime | .NET 10 (`net10.0-windows`) |
+| UI | WPF + [WPF UI](https://github.com/lepoco/wpfui) (Fluent) + [AvalonDock](https://github.com/Dirkster99/AvalonDock) |
+| MVVM | [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) |
+| Rendering | Direct3D 11 via [Vortice.Windows](https://github.com/amerkoleci/Vortice.Windows), HLSL shaders |
+| Viewport hosting | `D3DImage` (no airspace issues, WPF controls can overlay the viewport) |
+| Model loading | [SharpGLTF](https://github.com/vpenades/SharpGLTF) for glTF / GLB; lightweight custom OBJ / STL parsers |
+
+```mermaid
+flowchart LR
+    A[WPF UI<br/>Fluent / MVVM] -->|commands, camera, ids| B[PolyView.Render<br/>Vortice D3D11]
+    B -->|shared surface| C[D3DImage<br/>viewport]
+    D[Loaders<br/>SharpGLTF / OBJ / STL] -->|background thread| B
+    B --> E[(GPU)]
+```
+
+<details>
+<summary><b>💡 Why <code>D3DImage</code> instead of <code>HwndHost</code>?</b></summary>
+
+<br>
+
+`HwndHost` embeds a native child window that always draws on top of WPF content, so overlays, popups,
+transparency and rounded corners break around the viewport. Rendering into a shared surface shown through
+`D3DImage` keeps the viewport a normal WPF element, which is what makes a polished UI possible.
+
+</details>
+
+## ⚡ Memory & Performance Principles
+
+- ✅ Vertex / index data is uploaded to the GPU, then the CPU-side copy is released immediately
+- ✅ Large buffers use `ArrayPool<T>` / `NativeMemory` to avoid Large Object Heap churn
+- ✅ **Zero allocations per frame** in the render loop (struct math, no LINQ / closures / string building)
+- ✅ All GPU resources are `IDisposable` and released explicitly, never left to the GC
+- ✅ Model loading runs on a background thread; GPU upload happens on the render thread
+- ✅ Each phase is verified by opening / closing the same model 20 times and checking memory returns to baseline
+
+## 🗺️ Roadmap
+
+- [ ] **Phase 0 – Skeleton:** WPF window + D3D11 viewport, correct resize & DPI handling, clean shutdown
+- [ ] **Phase 1 – Test window:** load GLB / glTF, orbit / pan / zoom, solid & wireframe, FPS / triangle / memory overlay
+- [ ] **Phase 2 – Main UI:** Fluent theme, scene tree, viewport, property panel, multi-file scenes, picking
+- [ ] **Phase 3 – Formats & polish:** OBJ / STL, view cube / axis gizmo, recent folders, loading progress
+- [ ] **Later:** measurement, section / exploded views, embedding the viewport in other WPF apps
+
+## 🚀 Getting Started
+
+### Requirements
+
+- 🪟 Windows 10 / 11
+- 📦 [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- 🧰 Visual Studio 2026 with the **.NET desktop development** workload
+- 🎮 A GPU supporting Direct3D 11
+
+### Build & Run
+
+```bash
+git clone <this-repo-url>
+cd 1023_PolyView/PolyView
+dotnet build PolyView.slnx
+dotnet run --project PolyView/PolyView.csproj
+```
+
+Or open `PolyView/PolyView.slnx` in Visual Studio and press **F5**.
+
+## 📁 Project Structure
+
+```
+1023_PolyView/
+├── README.md
+├── README.zh-CN.md
+├── PolyView/
+│   ├── PolyView.slnx        # Open this in Visual Studio 2026
+│   └── PolyView/            # WPF application project
+├── samples/                 # Test models (glTF / GLB / OBJ / STL)
+└── docs/                    # Design notes and development plan
+```
+
+## 🧩 Sample Models
+
+Test models come from CC0 (public domain) sources such as [Kenney](https://kenney.nl/),
+[Quaternius](https://quaternius.com/) and [Poly Haven](https://polyhaven.com/). Large files are not committed.
+
+## 🙏 Acknowledgements
+
+[WPF UI](https://github.com/lepoco/wpfui) · [AvalonDock](https://github.com/Dirkster99/AvalonDock) ·
+[Vortice.Windows](https://github.com/amerkoleci/Vortice.Windows) · [SharpGLTF](https://github.com/vpenades/SharpGLTF) ·
+[CommunityToolkit](https://github.com/CommunityToolkit/dotnet)
+
+## 📄 License
+
+To be decided (MIT recommended). Third-party libraries keep their own licenses.
+
+<div align="center">
+
+<sub>Made with ❤️ and C#</sub> · [⬆ Back to top](#-polyview)
+
+</div>
