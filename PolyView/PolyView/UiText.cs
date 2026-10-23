@@ -72,6 +72,9 @@ public static class UiText
     public static string LightArea => Chinese ? "面光" : "Area";
     public static string LightAmbient => Chinese ? "环境光" : "Ambient";
     public static string KindWorld => Chinese ? "世界" : "World";
+    public static string TipExcludeCollection => Chinese ? "\u4ece\u89c6\u56fe\u5c42\u4e2d\u6392\u9664\n\u53d6\u6d88\u52fe\u9009\u540e\uff0c\u96c6\u5408\u53ca\u5176\u4e2d\u6240\u6709\u7269\u4f53\u5728\u89c6\u53e3\u4e2d\u9690\u85cf\uff0c\u4e5f\u4e0d\u80fd\u88ab\u9009\u4e2d\u3002" : "Exclude from View Layer\nUnchecked: the collection and all its objects are hidden in the viewport and cannot be selected.";
+    public static string TipCollectionHide => Chinese ? "\u5728\u89c6\u56fe\u4e2d\u9690\u85cf\n\u9690\u85cf\u96c6\u5408\u5185\u7684\u6240\u6709\u7269\u4f53\u3002" : "Hide in Viewport\nHides every object in the collection.";
+    public static string TipDisableRender => Chinese ? "\u7981\u7528\u6e32\u67d3\n\u5173\u95ed\u540e\u8be5\u9879\uff08\u53ca\u96c6\u5408\u5185\u7269\u4f53\uff09\u4e0d\u53c2\u4e0e\u6e32\u67d3\u3002" : "Disable in Renders\nWhen off, this item (and objects in the collection) are left out of renders.";
     public static string OutlinerSearch => Chinese ? "搜索" : "Search";
     public static string TransformTitle => Chinese ? "变换" : "Transform";
     public static string TransformLocation => Chinese ? "位置" : "Location";

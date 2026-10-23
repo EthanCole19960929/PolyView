@@ -58,13 +58,27 @@ public partial class OutlinerPanel : UserControl
         viewport.SelectionChanged += (_, _) => SyncFromViewport();
         viewport.ObjectChanged += (_, id) =>
         {
+            if (_applying)
+            {
+                return;
+            }
+
             foreach (var item in AllItems())
             {
                 if (item.ObjectId == id)
                 {
-                    item.SetVisibleSilently(item.NodeIndex < 0
-                        ? viewport.TryGetObjectInfo(id, out var info) && info.Visible
-                        : viewport.IsNodeVisible(id, item.NodeIndex));
+                    if (item.NodeIndex < 0)
+                    {
+                        if (_collIncluded && _collVisible && viewport.TryGetObjectInfo(id, out var info))
+                        {
+                            _ownVisible[id] = info.Visible;
+                            item.SetVisibleSilently(info.Visible);
+                        }
+                    }
+                    else
+                    {
+                        item.SetVisibleSilently(viewport.IsNodeVisible(id, item.NodeIndex));
+                    }
                 }
             }
 
@@ -123,9 +137,9 @@ public partial class OutlinerPanel : UserControl
         _roots.Clear();
         var scene = new OutlinerItem(this, OutlinerKind.Scene, UiText.OutlinerScene, SpecialId, -1);
         var collection = new OutlinerItem(this, OutlinerKind.Collection, "Collection", SpecialId - 1, -1);
+        collection.InitCollection(_collIncluded, _collVisible, _collRenderable);
+        _collection = collection;
         scene.Add(collection);
-        collection.Add(new OutlinerItem(this, OutlinerKind.Camera, UiText.KindCamera, SpecialId - 2, -1));
-        collection.Add(new OutlinerItem(this, OutlinerKind.Light, UiText.KindLight, SpecialId - 3, -1));
         foreach (int id in _viewport.ObjectIds)
         {
             if (!_viewport.TryGetObjectInfo(id, out var info))
@@ -133,11 +147,21 @@ public partial class OutlinerPanel : UserControl
                 continue;
             }
 
+            if (!_ownVisible.ContainsKey(id))
+            {
+                _ownVisible[id] = info.Visible;
+            }
+
             var viewport = _viewport;
-            var file = new OutlinerItem(this, OutlinerKind.File, info.Name, id, -1, v => viewport.SetObjectVisible(id, v));
-            file.SetVisibleSilently(info.Visible);
-            collection.Add(file);
             var nodes = _viewport.GetNodes(id);
+            var file = new OutlinerItem(this, FileKind(nodes), info.Name, id, -1, v =>
+            {
+                _ownVisible[id] = v;
+                ApplyCollection();
+            });
+            file.SetVisibleSilently(_ownVisible[id]);
+            file.SetRenderableSilently(!_renderOff.Contains((id, -1)));
+            collection.Add(file);
             var created = new OutlinerItem[nodes.Count];
             for (int i = 0; i < nodes.Count; i++)
             {
@@ -145,20 +169,20 @@ public partial class OutlinerPanel : UserControl
                 int nodeIndex = node.Index;
                 var item = new OutlinerItem(this, KindOf(node.Kind), NodeName(node), id, nodeIndex, v => viewport.SetNodeVisible(id, nodeIndex, v));
                 item.SetVisibleSilently(_viewport.IsNodeVisible(id, nodeIndex));
+                item.SetRenderableSilently(!_renderOff.Contains((id, nodeIndex)));
                 created[i] = item;
                 var parent = node.Parent >= 0 && node.Parent < i ? created[node.Parent] : file;
                 parent.Add(item);
             }
 
-            // 只有一个根节点、和文件同为网格且没有子节点时，不再重复显示一层。
-            if (file.Children.Count == 1 && file.Children[0].Children.Count == 0 && file.Children[0].Kind == OutlinerKind.Mesh)
+            // A single childless root node of the same kind as the object is not repeated as an extra level.
+            if (file.Children.Count == 1 && file.Children[0].Children.Count == 0 && file.Children[0].Kind == file.Kind)
             {
                 file.Children.Clear();
             }
         }
 
         _roots.Add(scene);
-        _roots.Add(new OutlinerItem(this, OutlinerKind.World, UiText.KindWorld, SpecialId - 4, -1));
         foreach (var item in AllItems())
         {
             var key = (item.ObjectId, item.NodeIndex);
@@ -166,7 +190,113 @@ public partial class OutlinerPanel : UserControl
                 : expanded.Contains(key) || item.Kind is OutlinerKind.Scene or OutlinerKind.Collection);
         }
 
+        ApplyCollection();
         Flatten();
+    }
+
+    // ---------------- Collection toggles (exclude / hide / disable in renders) ----------------
+
+    readonly Dictionary<int, bool> _ownVisible = [];
+    readonly HashSet<(int, int)> _renderOff = [];
+    OutlinerItem? _collection;
+    bool _collIncluded = true;
+    bool _collVisible = true;
+    bool _collRenderable = true;
+    bool _applying;
+
+    internal void OnRenderableChanged(OutlinerItem item)
+    {
+        if (item.Kind == OutlinerKind.Collection)
+        {
+            _collRenderable = item.Renderable;
+            ApplyCollection();
+            return;
+        }
+
+        if (item.Renderable)
+        {
+            _renderOff.Remove((item.ObjectId, item.NodeIndex));
+        }
+        else
+        {
+            _renderOff.Add((item.ObjectId, item.NodeIndex));
+        }
+    }
+
+    internal void OnCollectionToggled(OutlinerItem collection)
+    {
+        _collIncluded = collection.Included;
+        _collVisible = collection.Visible;
+        _collRenderable = collection.Renderable;
+        ApplyCollection();
+    }
+
+    /// <summary>Pushes the collection state to the viewport: an excluded or hidden collection hides (and makes unpickable) every child object.</summary>
+    internal void ApplyCollection()
+    {
+        if (_viewport == null || _collection == null)
+        {
+            return;
+        }
+
+        bool shown = _collIncluded && _collVisible;
+        _applying = true;
+        try
+        {
+            foreach (var file in _collection.Children)
+            {
+                bool own = _ownVisible.TryGetValue(file.ObjectId, out var v) ? v : true;
+                _viewport.SetObjectVisible(file.ObjectId, own && shown);
+            }
+        }
+        finally
+        {
+            _applying = false;
+        }
+
+        foreach (var file in _collection.Children)
+        {
+            SetInherited(file, !shown, !_collIncluded, !_collRenderable);
+        }
+
+        _viewport.Invalidate();
+    }
+
+    static void SetInherited(OutlinerItem item, bool off, bool excluded, bool renderOff)
+    {
+        item.SetInherited(off, excluded, renderOff);
+        foreach (var child in item.Children)
+        {
+            SetInherited(child, off, excluded, renderOff);
+        }
+    }
+
+    static OutlinerKind FileKind(IReadOnlyList<SceneNode> nodes)
+    {
+        if (nodes.Count == 0)
+        {
+            return OutlinerKind.Mesh;
+        }
+
+        bool allLights = true, allCameras = true, anyMesh = false;
+        foreach (var n in nodes)
+        {
+            allLights &= n.Kind is SceneNodeKind.Light or SceneNodeKind.Empty;
+            allCameras &= n.Kind is SceneNodeKind.Camera or SceneNodeKind.Empty;
+            anyMesh |= n.Kind == SceneNodeKind.Mesh;
+        }
+
+        if (!anyMesh && allLights && nodes.Any(n => n.Kind == SceneNodeKind.Light))
+        {
+            return OutlinerKind.Light;
+        }
+
+        if (!anyMesh && allCameras && nodes.Any(n => n.Kind == SceneNodeKind.Camera))
+        {
+            return OutlinerKind.Camera;
+        }
+
+        return anyMesh ? OutlinerKind.Mesh : OutlinerKind.Empty;
     }
 
     static OutlinerKind KindOf(SceneNodeKind kind) => kind switch
@@ -413,207 +543,3 @@ public partial class OutlinerPanel : UserControl
     }
 }
 
-public enum OutlinerKind
-{
-    Scene,
-    Collection,
-    World,
-    File,
-    Mesh,
-    Camera,
-    Light,
-    Empty,
-}
-
-public sealed class OutlinerItem : INotifyPropertyChanged
-{
-    static readonly Brush Orange = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0xA3, 0x3C)));
-    static readonly Brush White = Freeze(new SolidColorBrush(Color.FromRgb(0xDA, 0xDA, 0xDA)));
-    static readonly Brush WorldBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xE0, 0x60, 0x60)));
-    readonly OutlinerPanel _owner;
-    readonly Action<bool>? _onVisibleChanged;
-    bool _visible = true;
-    bool _renderable = true;
-    bool _expanded;
-    int _depth;
-
-    public OutlinerItem(OutlinerPanel owner, OutlinerKind kind, string name, int objectId, int nodeIndex, Action<bool>? onVisibleChanged = null)
-    {
-        _owner = owner;
-        Kind = kind;
-        Name = name;
-        ObjectId = objectId;
-        NodeIndex = nodeIndex;
-        _onVisibleChanged = onVisibleChanged;
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    public OutlinerKind Kind { get; }
-    public string Name { get; }
-
-    /// <summary>对象 id（文件 / 节点行）；场景、集合、视口相机 / 灯光、世界为负数。</summary>
-    public int ObjectId { get; }
-
-    /// <summary>MeshData.Nodes 下标；文件行和特殊行为 -1。</summary>
-    public int NodeIndex { get; }
-
-    public OutlinerItem? Parent { get; private set; }
-    public List<OutlinerItem> Children { get; } = [];
-
-    public void Add(OutlinerItem child)
-    {
-        child.Parent = this;
-        Children.Add(child);
-    }
-
-    public int Depth
-    {
-        get => _depth;
-        set
-        {
-            if (_depth != value)
-            {
-                _depth = value;
-                Raise(nameof(IndentMargin));
-            }
-        }
-    }
-
-    public Thickness IndentMargin => new(4 + _depth * 14, 0, 2, 0);
-
-    public bool Matches(string filter)
-    {
-        if (Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        foreach (var child in Children)
-        {
-            if (child.Matches(filter))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public bool Expanded
-    {
-        get => _expanded;
-        set
-        {
-            if (_expanded == value)
-            {
-                return;
-            }
-
-            _expanded = value;
-            Raise(nameof(Expanded));
-            Raise(nameof(ChevronGlyph));
-            _owner.Flatten();
-        }
-    }
-
-    public void SetExpandedSilently(bool expanded)
-    {
-        _expanded = expanded;
-        Raise(nameof(Expanded));
-        Raise(nameof(ChevronGlyph));
-    }
-
-    public string ChevronGlyph => _expanded ? "\uE70D" : "\uE76C";
-
-    public Visibility ChevronVisibility => Children.Count > 0 ? Visibility.Visible : Visibility.Hidden;
-
-    // Segoe MDL2 / Segoe UI Symbol：集合、世界、相机、灯、网格（三角形）、空节点
-    public string Icon => Kind switch
-    {
-        OutlinerKind.Scene => "\uE8B7",
-        OutlinerKind.Collection => "",
-        OutlinerKind.World => "\uE909",
-        OutlinerKind.Camera => "\uE722",
-        OutlinerKind.Light => "\uEA80",
-        OutlinerKind.Empty => "\uE8FD",
-        _ => "\u25BD",
-    };
-
-    public FontFamily IconFont => Kind is OutlinerKind.File or OutlinerKind.Mesh ? SymbolFont : IconFontFamily;
-
-    static readonly FontFamily IconFontFamily = new("Segoe MDL2 Assets");
-    static readonly FontFamily SymbolFont = new("Segoe UI Symbol");
-
-    public Brush IconBrush => Kind switch
-    {
-        OutlinerKind.Scene => White,
-        OutlinerKind.World => WorldBrush,
-        _ => Orange,
-    };
-
-    public Visibility CheckVisibility => Kind == OutlinerKind.Collection ? Visibility.Visible : Visibility.Collapsed;
-
-    public string DataGlyph => Kind is OutlinerKind.File or OutlinerKind.Mesh ? "\u25BC" : "";
-
-    public Visibility ToggleVisibility => ObjectId >= 0 ? Visibility.Visible : Visibility.Hidden;
-
-    public bool Visible
-    {
-        get => _visible;
-        set
-        {
-            if (_visible == value)
-            {
-                return;
-            }
-
-            _visible = value;
-            RaiseVisible();
-            _onVisibleChanged?.Invoke(value);
-        }
-    }
-
-    /// <summary>渲染开关（相机图标）。本程序没有离线渲染，只记录状态，和 Blender 外观保持一致。</summary>
-    public bool Renderable
-    {
-        get => _renderable;
-        set
-        {
-            _renderable = value;
-            Raise(nameof(Renderable));
-        }
-    }
-
-    public string EyeGlyph => _visible ? "\uE890" : "\uED1A";
-
-    public double NameOpacity => _visible ? 1.0 : 0.45;
-
-    public string EyeTip => UiText.ToggleVisibility;
-
-    public void SetVisibleSilently(bool visible)
-    {
-        if (_visible == visible)
-        {
-            return;
-        }
-
-        _visible = visible;
-        RaiseVisible();
-    }
-
-    void RaiseVisible()
-    {
-        Raise(nameof(Visible));
-        Raise(nameof(EyeGlyph));
-        Raise(nameof(NameOpacity));
-    }
-
-    void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-
-    static Brush Freeze(Brush brush)
-    {
-        brush.Freeze();
-        return brush;
-    }
-}
