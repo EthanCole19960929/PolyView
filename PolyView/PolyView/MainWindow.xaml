@@ -117,6 +117,7 @@
                         <MenuItem x:Name="MenuLanguage" Click="LanguageButton_Click"/>
                         <MenuItem x:Name="MenuPreferences" IsEnabled="False"/>
                     </MenuItem>
+                    <MenuItem x:Name="MenuAdd"/>
                     <MenuItem x:Name="MenuRender">
                         <MenuItem x:Name="MenuRenderImage" IsEnabled="False" InputGestureText="F12"/>
                         <MenuItem x:Name="MenuRenderAnimation" IsEnabled="False" InputGestureText="Ctrl+F12"/>

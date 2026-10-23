@@ -89,6 +89,7 @@ public static class UiText
     public static string ShadeMaterial => Chinese ? "\u663e\u793a\u57fa\u7840\u8272\u8d34\u56fe\uff0c\u4f7f\u7528\u9ed8\u8ba4\u73af\u5883\u5149\u7167\u3002" : "Base color textures with default environment lighting.";
     public static string ShadeRenderedName => Chinese ? "\u6e32\u67d3" : "Rendered";
     public static string ShadeRendered => Chinese ? "\u4f7f\u7528\u573a\u666f\u706f\u5149\u548c\u4e16\u754c\u73af\u5883\u5149\u663e\u793a\u3002" : "Scene lights and World ambient.";
+    public static string MenuAdd => Chinese ? "\u6dfb\u52a0" : "Add";
     public static string TipMoveName => Chinese ? "移动" : "Move";
     public static string TipRotateName => Chinese ? "旋转" : "Rotate";
     public static string TipScaleName => Chinese ? "缩放" : "Scale";

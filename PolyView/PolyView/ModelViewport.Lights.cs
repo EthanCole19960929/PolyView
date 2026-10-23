@@ -312,7 +312,15 @@ public sealed partial class ModelViewport
             menu.Resources.MergedDictionaries.Add(window.Resources);
         }
 
-        menu.Items.Add(new MenuItem { Header = UiText.AddTitle, IsEnabled = false });
+        PopulateAddMenu(menu.Items);
+        menu.IsOpen = true;
+    }
+
+    /// <summary>Blender Add menu items (shared by Shift+A and the top-bar Add menu). Only lights are implemented.</summary>
+    public void PopulateAddMenu(ItemCollection items)
+    {
+        var menu = new { Items = items };
+        menu.Items.Add(new MenuItem { Header = UiText.AddTitle, IsEnabled = false, InputGestureText = "Shift+A" });
         menu.Items.Add(new Separator());
         menu.Items.Add(new MenuItem { Header = UiText.AddMesh, IsEnabled = false });
         menu.Items.Add(new MenuItem { Header = UiText.AddCurve, IsEnabled = false });
@@ -321,14 +329,33 @@ public sealed partial class ModelViewport
         var lights = new MenuItem { Header = UiText.AddLight };
         foreach (var type in new[] { SceneLightType.Point, SceneLightType.Directional, SceneLightType.Spot, SceneLightType.Area })
         {
-            var item = new MenuItem { Header = LightTypeName(type) };
+            var item = new MenuItem { Header = LightTypeName(type), Icon = LightMenuIcon(type) };
             item.Click += (_, _) => AddLight(type);
             lights.Items.Add(item);
         }
 
         menu.Items.Add(lights);
         menu.Items.Add(new MenuItem { Header = UiText.AddCamera, IsEnabled = false });
-        menu.IsOpen = true;
+    }
+
+    /// <summary>Blender-style light icons (vector, light grey).</summary>
+    static UIElement LightMenuIcon(SceneLightType type)
+    {
+        string data = type switch
+        {
+            SceneLightType.Point => "M7,2.5 A4.5,4.5 0 1 1 6.99,2.5 Z M7,5 A2,2 0 1 0 7.01,5 Z",
+            SceneLightType.Directional => "M7,4.5 A2.5,2.5 0 1 1 6.99,4.5 Z M6.4,0 H7.6 V3 H6.4 Z M6.4,11 H7.6 V14 H6.4 Z M0,6.4 H3 V7.6 H0 Z M11,6.4 H14 V7.6 H11 Z M1.8,2.6 L2.6,1.8 L4.6,3.8 L3.8,4.6 Z M9.4,10.2 L10.2,9.4 L12.2,11.4 L11.4,12.2 Z M9.4,3.8 L11.4,1.8 L12.2,2.6 L10.2,4.6 Z M1.8,11.4 L3.8,9.4 L4.6,10.2 L2.6,12.2 Z",
+            SceneLightType.Spot => "M5,1 H9 V4 L13,12 H1 L5,4 Z",
+            _ => "M2,2 H12 V8 H2 Z M3.5,9 H4.7 V13 H3.5 Z M6.4,9 H7.6 V13 H6.4 Z M9.3,9 H10.5 V13 H9.3 Z",
+        };
+        return new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse(data),
+            Fill = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
+            Width = 14,
+            Height = 14,
+            Stretch = Stretch.Uniform,
+        };
     }
 
     /// <summary>Add a Blender-default light as a new scene object (Point 1000 W, Sun 1 W/m², Spot 45°, Area 1 m, 1000 W).</summary>
@@ -364,6 +391,7 @@ public sealed partial class ModelViewport
         }
 
         _objects.Add(obj);
+        PushUndo(AddEntryId(obj.Id), obj.Transform, obj.Transform);
         Select(obj.Id);
         Invalidate();
         SceneChanged?.Invoke(this, EventArgs.Empty);

@@ -296,6 +296,11 @@ public sealed partial class ModelViewport
         _redo.Clear();
     }
 
+    readonly Dictionary<int, SceneObject> _removedByUndo = [];
+
+    /// <summary>Undo entries with a negative id mean "object was added".</summary>
+    static int AddEntryId(int id) => -id - 1;
+
     public void Undo() => UndoRedo(_undo, _redo, useOld: true);
 
     public void Redo() => UndoRedo(_redo, _undo, useOld: false);
@@ -306,6 +311,39 @@ public sealed partial class ModelViewport
         {
             var entry = from[^1];
             from.RemoveAt(from.Count - 1);
+            if (entry.Id < 0)
+            {
+                // "Add object" step: undo removes it, redo puts the same object back.
+                int realId = -entry.Id - 1;
+                if (useOld && TryGetObject(realId, out var added))
+                {
+                    _removedByUndo[realId] = added;
+                    RemoveObject(realId);
+                    to.Add(entry);
+                    return;
+                }
+
+                if (!useOld && _removedByUndo.Remove(realId, out var back))
+                {
+                    _objects.Add(back);
+                    if (back.Mesh.Vertices.Length > 0)
+                    {
+                        _renderer?.AddMesh(back.Id, back.Mesh);
+                    }
+
+                    _renderer?.SetWorld(back.Id, back.World);
+                    Select(back.Id);
+                    UpdateSceneBounds();
+                    Invalidate();
+                    SceneChanged?.Invoke(this, EventArgs.Empty);
+                    ViewChanged?.Invoke(this, EventArgs.Empty);
+                    to.Add(entry);
+                    return;
+                }
+
+                continue;
+            }
+
             if (TryGetObject(entry.Id, out var o))
             {
                 to.Add(entry);
