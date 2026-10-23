@@ -14,27 +14,31 @@ public static class UiText
 
     public static string Scale => Chinese ? "缩放" : "Scale";
 
-    public static string Stretch => Chinese ? "X 拉伸" : "Stretch X";
-
     public static string Hint => Chinese
-        ? "把 OBJ、STL 或 GLB/glTF 拖进窗口，或点击「打开模型」。左键旋转，滚轮缩放，中键平移。"
-        : "Drop an OBJ, STL or GLB/glTF file here, or click Open. Left-drag orbits, wheel zooms, middle-drag pans.";
+        ? "拖入或打开 OBJ / STL / GLB / glTF / FBX / DAE / three.js JSON。中键旋转（或左键），Shift+中键平移，滚轮或 Ctrl+中键缩放；Home / 小键盘 . 框选全部，小键盘 1 / 3 / 7 前 / 右 / 顶视图（加 Ctrl 看反面），小键盘 5 透视 / 正交。"
+        : "Drag in or open an OBJ, STL, GLB, glTF, FBX, DAE or three.js JSON file. Middle-drag (or left-drag) to orbit, Shift+middle-drag to pan, and scroll or Ctrl+middle-drag to zoom. Press Home or Numpad . to frame everything, Numpad 1 / 3 / 7 for the front, right and top views (add Ctrl for the opposite side), and Numpad 5 to switch between perspective and orthographic.";
 
     public static string Reading => Chinese ? "正在读取…" : "Reading…";
 
     public static string DropRejected => Chinese
-        ? "不支持这个文件，请拖入 .obj、.stl、.glb 或 .gltf 模型。"
-        : "Unsupported file. Drop a .obj, .stl, .glb or .gltf model.";
+        ? "不支持这个文件，请拖入 .obj、.stl、.glb、.gltf、.fbx、.dae 或 three.js .json 模型。"
+        : "This file type isn't supported. Use a .obj, .stl, .glb, .gltf, .fbx, .dae or three.js .json model.";
 
-    public static string Ready(string name, int vertices, int triangles, double frameMs) => Chinese
-        ? $"{name}    顶点 {vertices}    三角形 {triangles}    {frameMs:0.0} 毫秒"
-        : $"{name}    vertices {vertices}    triangles {triangles}    {frameMs:0.0} ms";
+    public static string Idle => Chinese ? "空闲" : "Idle";
 
-    public static string SampleReady(int vertices, int triangles, double frameMs) => Chinese
-        ? $"示例长方体    顶点 {vertices}    三角形 {triangles}    {frameMs:0.0} 毫秒"
-        : $"Sample bar    vertices {vertices}    triangles {triangles}    {frameMs:0.0} ms";
+    public static string Ortho => Chinese ? "正交" : "Orthographic";
+
+    public static string Perspective => Chinese ? "透视" : "Perspective";
+
+    public static string Ready(string name, int vertices, int triangles) => Chinese
+        ? $"{name}    顶点 {vertices:N0}    三角形 {triangles:N0}"
+        : $"{name}    Vertices: {vertices:N0}    Triangles: {triangles:N0}";
+
+    public static string Fps(double fps, double frameMs) => fps <= 0
+        ? Idle
+        : Chinese ? $"帧率 {fps:0} FPS（{frameMs:0.0} 毫秒）" : $"{fps:0} FPS ({frameMs:0.0} ms)";
 
     public static string FileFilter => Chinese
-        ? "模型文件|*.obj;*.stl;*.glb;*.gltf|OBJ|*.obj|STL|*.stl|GLB / glTF|*.glb;*.gltf|所有文件|*.*"
-        : "Model files|*.obj;*.stl;*.glb;*.gltf|OBJ|*.obj|STL|*.stl|GLB / glTF|*.glb;*.gltf|All files|*.*";
+        ? "模型文件|*.obj;*.stl;*.glb;*.gltf;*.fbx;*.dae;*.3ds;*.ply;*.json|GLB / glTF|*.glb;*.gltf|FBX|*.fbx|COLLADA (DAE)|*.dae|OBJ|*.obj|STL|*.stl|three.js JSON|*.json|3DS / PLY|*.3ds;*.ply|所有文件|*.*"
+        : "Model files|*.obj;*.stl;*.glb;*.gltf;*.fbx;*.dae;*.3ds;*.ply;*.json|GLB / glTF|*.glb;*.gltf|FBX|*.fbx|COLLADA (DAE)|*.dae|OBJ|*.obj|STL|*.stl|three.js JSON|*.json|3DS / PLY|*.3ds;*.ply|All files|*.*";
 }
