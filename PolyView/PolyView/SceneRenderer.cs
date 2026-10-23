@@ -219,6 +219,18 @@ public sealed class SceneRenderer : IDisposable
         _objects.Add(gpu);
     }
 
+    /// <summary>显示 / 隐藏一个对象（不释放资源）。</summary>
+    public void SetVisible(int id, bool visible)
+    {
+        for (int i = 0; i < _objects.Count; i++)
+        {
+            if (_objects[i].Id == id)
+            {
+                _objects[i].Visible = visible;
+            }
+        }
+    }
+
     /// <summary>释放一个对象的 GPU 资源。</summary>
     public void RemoveMesh(int id)
     {
@@ -409,7 +421,7 @@ public sealed class SceneRenderer : IDisposable
         for (int o = 0; o < _objects.Count; o++)
         {
             var gpu = _objects[o];
-            if (gpu.IndexCount <= 0)
+            if (gpu.IndexCount <= 0 || !gpu.Visible)
             {
                 continue;
             }
@@ -622,6 +634,7 @@ public sealed class SceneRenderer : IDisposable
         public required ID3D11Buffer Vertices;
         public required ID3D11Buffer Indices;
         public int IndexCount;
+        public bool Visible = true;
         public MeshPart[] Parts = [];
         public readonly List<(ID3D11Texture2D Texture, ID3D11ShaderResourceView View)> Textures = [];
 

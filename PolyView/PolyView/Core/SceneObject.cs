@@ -10,6 +10,9 @@ public sealed class SceneObject
     public string? SourcePath { get; init; }
     public required MeshData Mesh { get; init; }
 
+    /// <summary>只影响显示和拾取，不删除对象。</summary>
+    public bool Visible { get; set; } = true;
+
     public int VertexCount => Mesh.Vertices.Length;
     public int TriangleCount => Mesh.TriangleCount;
     public Vector3 Min => Mesh.Min;
@@ -24,7 +27,8 @@ public readonly record struct SceneObjectInfo(
     int VertexCount,
     int TriangleCount,
     Vector3 Min,
-    Vector3 Max)
+    Vector3 Max,
+    bool Visible)
 {
     public Vector3 Size => Max - Min;
 }

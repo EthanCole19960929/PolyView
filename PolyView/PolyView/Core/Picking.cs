@@ -94,6 +94,11 @@ public static class Picking
         for (int o = 0; o < objects.Count; o++)
         {
             var obj = objects[o];
+            if (!obj.Visible)
+            {
+                continue;
+            }
+
             if (!RayAabb(ray, obj.Min, obj.Max, out float enter) || enter > best.Distance)
             {
                 continue;

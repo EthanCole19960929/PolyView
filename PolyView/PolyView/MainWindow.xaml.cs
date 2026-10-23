@@ -13,6 +13,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Viewport.ViewChanged += (_, _) => UpdateStatus();
+        Outliner.Attach(Viewport);
         ApplyLanguage();
 
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
@@ -23,11 +24,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 支持「打开方式」或命令行：PolyView.exe 模型路径
-        var startup = args.FirstOrDefault(MeshImporter.IsSupported);
-        if (startup != null && System.IO.File.Exists(startup))
+        // 支持「打开方式」或命令行：PolyView.exe 模型1 [模型2 ...]，多个文件一起打开
+        var startup = args.Where(a => MeshImporter.IsSupported(a) && System.IO.File.Exists(a))
+            .Select(System.IO.Path.GetFullPath)
+            .ToArray();
+        if (startup.Length > 0)
         {
-            Viewport.LoadPath(System.IO.Path.GetFullPath(startup));
+            Viewport.LoadPaths(startup);
         }
     }
 
@@ -38,6 +41,7 @@ public partial class MainWindow : Window
         ResetButton.Content = UiText.Reset;
         LanguageButton.Content = UiText.Language;
         HintText.Text = UiText.Hint;
+        Outliner.ApplyLanguage();
         UpdateStatus();
         UpdateProjection();
     }
@@ -54,7 +58,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (Viewport.HandleKey(e.Key, Keyboard.Modifiers))
+        // Alt 组合键时 WPF 给的是 Key.System，真实按键在 SystemKey 里。
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (Viewport.HandleKey(key, Keyboard.Modifiers))
         {
             e.Handled = true;
             UpdateProjection();
@@ -139,32 +145,29 @@ public partial class MainWindow : Window
     void Window_Drop(object sender, DragEventArgs e)
     {
         e.Handled = true;
-        var path = FirstModelFile(e);
-        if (path == null)
+        var paths = ModelFiles(e);
+        if (paths.Length == 0)
         {
             ShowNotice(UiText.DropRejected);
             return;
         }
 
         _notice = null;
-        Viewport.LoadPath(path);
+        // 一次拖入多个文件：一起打开（第一个替换场景，其余追加）。
+        Viewport.LoadPaths(paths);
         Activate();
     }
 
-    static bool HasModelFile(DragEventArgs e) => FirstModelFile(e) != null;
+    static bool HasModelFile(DragEventArgs e) => ModelFiles(e).Length > 0;
 
-    static string? FirstModelFile(DragEventArgs e)
+    static string[] ModelFiles(DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent(DataFormats.FileDrop))
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)
+            || e.Data.GetData(DataFormats.FileDrop) is not string[] files)
         {
-            return null;
+            return [];
         }
 
-        if (e.Data.GetData(DataFormats.FileDrop) is not string[] files)
-        {
-            return null;
-        }
-
-        return files.FirstOrDefault(MeshImporter.IsSupported);
+        return files.Where(MeshImporter.IsSupported).ToArray();
     }
 }

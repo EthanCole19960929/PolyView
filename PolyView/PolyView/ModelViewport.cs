@@ -131,7 +131,7 @@ public sealed class ModelViewport : UserControl
     {
         if (TryGetObject(id, out var o))
         {
-            info = new SceneObjectInfo(o.Id, o.Name, o.SourcePath, o.VertexCount, o.TriangleCount, o.Min, o.Max);
+            info = new SceneObjectInfo(o.Id, o.Name, o.SourcePath, o.VertexCount, o.TriangleCount, o.Min, o.Max, o.Visible);
             return true;
         }
 
@@ -175,6 +175,26 @@ public sealed class ModelViewport : UserControl
         SceneRenderer.GetViewProjection(_camera, _scale, SceneRadius, aspect, out var view, out var projection);
         var ray = Picking.CreateRay((float)position.X, (float)position.Y, (float)ActualWidth, (float)ActualHeight, view, projection);
         return Picking.Pick(ray, _objects, Matrix4x4.CreateScale(_scale)).ObjectId;
+    }
+
+    /// <summary>对象属性（可见性 / 变换）变化，参数为对象 id。</summary>
+    public event EventHandler<int>? ObjectChanged;
+
+    /// <summary>属性栏用的变换文本；没有变换功能前返回空字符串。</summary>
+    public string GetObjectTransformText(int id) => "";
+
+    /// <summary>显示 / 隐藏对象：只影响显示和拾取，不删除。</summary>
+    public void SetObjectVisible(int id, bool visible)
+    {
+        if (!TryGetObject(id, out var o) || o.Visible == visible)
+        {
+            return;
+        }
+
+        o.Visible = visible;
+        _renderer?.SetVisible(id, visible);
+        Invalidate();
+        ObjectChanged?.Invoke(this, id);
     }
 
     /// <summary>移除一个对象并释放其 GPU 资源。</summary>
@@ -376,6 +396,14 @@ public sealed class ModelViewport : UserControl
             case Key.Escape:
                 Select(-1);
                 return true;
+            case Key.Delete:
+                if (_selectedId < 0)
+                {
+                    return false;
+                }
+
+                RemoveObject(_selectedId);
+                return true;
             case Key.Home:
             case Key.Decimal:
                 FrameAll();
@@ -482,6 +510,7 @@ public sealed class ModelViewport : UserControl
                 foreach (var o in _objects)
                 {
                     _renderer.AddMesh(o.Id, o.Mesh);
+                    _renderer.SetVisible(o.Id, o.Visible);
                 }
 
                 LastUploadMilliseconds = watch.Elapsed.TotalMilliseconds;
