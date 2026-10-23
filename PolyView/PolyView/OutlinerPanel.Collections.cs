@@ -332,7 +332,9 @@ public partial class OutlinerPanel
         var item = _dragItem;
         _dragItem = null;
         _pendingSingle = null;
+        EnsureDragFeedbackHooks();
         DragDrop.DoDragDrop(ItemList, new DataObject(typeof(OutlinerItem), item), DragDropEffects.Move | DragDropEffects.Link);
+        ClearDragFeedback();
     }
 
     SceneCollection? DropTarget(DragEventArgs e, out OutlinerItem? dragged)
