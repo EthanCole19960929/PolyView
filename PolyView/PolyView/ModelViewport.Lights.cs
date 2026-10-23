@@ -320,7 +320,7 @@ public sealed partial class ModelViewport
     public void PopulateAddMenu(ItemCollection items)
     {
         var menu = new { Items = items };
-        menu.Items.Add(new MenuItem { Header = UiText.AddTitle, IsEnabled = false, InputGestureText = "Shift+A" });
+        menu.Items.Add(new MenuItem { Header = UiText.AddTitle, IsEnabled = false, InputGestureText = "Shift+A", Tag = "header" });
         menu.Items.Add(new Separator());
         menu.Items.Add(new MenuItem { Header = UiText.AddMesh, IsEnabled = false });
         menu.Items.Add(new MenuItem { Header = UiText.AddCurve, IsEnabled = false });
