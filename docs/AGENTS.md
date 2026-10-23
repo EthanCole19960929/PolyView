@@ -23,7 +23,10 @@ PolyView 是一个用 C# 写的轻量 Windows 3D 模型查看器：WPF 做界面
 | 10 | [10_渲染实现与性能.md](10_渲染实现与性能.md) | program | 2026-10-23 | 每帧渲染流程、着色模式与光照公式、和 Blender Workbench/Eevee/Cycles 对比、CPU/GPU 内存推算、风险和后续优化 |
 | 11 | [11_MCP接入设计.md](11_MCP接入设计.md) | program | 2026-10-23 | AI 通过 MCP 操控 PolyView：架构对比与推荐、线程/撤销/安全、工具与资源、客户端配置、分阶段计划、AI 可调用原则 |
 | 12 | [12_Blender联动设计.md](12_Blender联动设计.md) | program | 2026-10-23 | PolyView 与 Blender 联动：一键发送、导入 .blend、双向实时同步（Live Link）、复用 MCP |
+| 13 | [13_Blender材质系统.md](13_Blender材质系统.md) | novel | 2026-10-23 | Blender 4.2 材质系统（数据块 / 槽 / Principled BSDF / Settings / 视口模式 / glTF 映射）与 PolyView 借鉴方案：数据模型、导入映射、PBR 渲染与 Opaque/Mask/Blend、属性面板、撤销、P0/P1/P2 验收
 | — | [AGENTS.md](AGENTS.md) | 小B | 2026-10-23 | 本文：接手说明和文档索引 |
+
+**材质技术路线：** 阶段 1 固定参数 PBR（照 Filament，对照 glTF Sample Viewer）→ 阶段 2 贴图 + IBL → 阶段 3 MaterialX 节点 + 自定义 HLSL；Apache-2.0 项目可参考并注明出处，Blender/EEVEE 是 GPL 只借鉴思路。详见 [13_Blender材质系统.md](13_Blender材质系统.md) 第三部分。
 
 **规则：** 新的 Markdown 文档一律放进 `docs\`，文件名用下一个两位编号 `NN_标题.md`，并且必须加进上面这张表。只有 `AGENTS.md` 不编号。
 

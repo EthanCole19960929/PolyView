@@ -680,6 +680,7 @@ public sealed partial class ModelViewport : UserControl
         UpdateGizmo();
         UpdateNavGizmo();
         UpdateLights();
+        PushMaterials();
         _renderer!.Render(_camera, _scale, SceneRadius);
     }
 

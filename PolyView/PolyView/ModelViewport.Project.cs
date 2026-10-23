@@ -23,6 +23,7 @@ public sealed partial class ModelViewport
                 Scale = [o.Transform.Scale.X, o.Transform.Scale.Y, o.Transform.Scale.Z],
                 Visible = o.Visible,
                 HiddenNodes = [.. o.HiddenNodes.Order()],
+                MaterialSlots = o.MaterialSlots.Count > 0 ? CaptureSlots(o) : null,
             };
             if (o.SourcePath != null && File.Exists(o.SourcePath))
             {
@@ -78,6 +79,7 @@ public sealed partial class ModelViewport
             doc.Objects.Add(po);
         }
 
+        doc.Materials = CaptureMaterials();
         doc.View = new ProjectView
         {
             Target = [_camera.Target.X, _camera.Target.Y, _camera.Target.Z],
@@ -119,6 +121,7 @@ public sealed partial class ModelViewport
         _failure = null;
         var map = new Dictionary<int, int>();
         var failed = new List<string>();
+        RestoreMaterials(doc.Materials);
         foreach (var po in doc.Objects)
         {
             SceneObject? obj = null;
@@ -174,6 +177,7 @@ public sealed partial class ModelViewport
             }
 
             SetObjectVisible(obj.Id, po.Visible);
+            RestoreSlots(obj, po.MaterialSlots);
         }
 
         UpdateSceneBounds();

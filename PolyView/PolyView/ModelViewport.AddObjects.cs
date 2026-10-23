@@ -400,6 +400,7 @@ public sealed partial class ModelViewport
         }
 
         copy.Transform = src.Transform;
+        CopySlots(src, copy);
         _renderer?.SetWorld(copy.Id, copy.World);
         PushUndo(AddEntryId(copy.Id), copy.Transform, copy.Transform);
         UpdateSceneBounds();

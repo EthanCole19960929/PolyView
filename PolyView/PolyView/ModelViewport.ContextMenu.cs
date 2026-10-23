@@ -302,6 +302,7 @@ public sealed partial class ModelViewport
         {
             var mesh = linked ? o.Mesh : MeshOps.Clone(o.Mesh);
             ids.Add(AddObjectCopy(mesh, o.Transform, o.Name, o.SourcePath, GetPrimitiveSpec(o.Id)));
+            if (TryGetObject(ids[^1], out var copy)) CopySlots(o, copy);
         }
 
         if (ids.Count > 0)

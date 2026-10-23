@@ -147,6 +147,7 @@ public sealed class PropertiesEditor : UserControl
         viewport.SelectionChanged += (_, _) => Refresh();
         viewport.SceneChanged += (_, _) => Refresh();
         viewport.ObjectChanged += (_, id) => { if (id == ActiveId) QueueUpdate(); };
+        viewport.MaterialsChanged += (_, _) => { if (_tab == Tab.Material) { _shownId = -2; Dispatcher.BeginInvoke((Action)Refresh); } };
         Refresh();
     }
 
@@ -587,87 +588,183 @@ public sealed class PropertiesEditor : UserControl
     void BuildMaterial(int id)
     {
         var vp = _viewport!;
-        var slots = vp.GetMaterials(id);
+        var slots = vp.GetSlots(id);
         if (_materialSlot >= slots.Count) _materialSlot = 0;
-        var list = new ListBox { Background = Frozen(0x23, 0x23, 0x23), Foreground = TextBrush, BorderThickness = new Thickness(0), MinHeight = 60, MaxHeight = 120, Margin = new Thickness(0, 0, 0, 6) };
-        foreach (var s in slots)
+
+        // Material Slots list + / - (Blender: list on the left, buttons on the right)
+        var list = new ListBox { Background = Frozen(0x23, 0x23, 0x23), Foreground = TextBrush, BorderThickness = new Thickness(0), MinHeight = 44, MaxHeight = 120 };
+        for (int i = 0; i < slots.Count; i++)
         {
+            var sm = slots[i].Material;
             var row = new StackPanel { Orientation = Orientation.Horizontal };
-            row.Children.Add(new Ellipse { Width = 12, Height = 12, Fill = new SolidColorBrush(ToColor(s.BaseColor)), Stroke = DimText, Margin = new Thickness(0, 0, 6, 0) });
-            row.Children.Add(new TextBlock { Text = s.Name, Foreground = TextBrush });
-            list.Items.Add(new ListBoxItem { Content = row, Foreground = TextBrush });
+            row.Children.Add(new Ellipse { Width = 12, Height = 12, Fill = sm != null ? new SolidColorBrush(ToColor(sm.BaseColor)) : DimText, Stroke = DimText, Margin = new Thickness(0, 0, 6, 0) });
+            row.Children.Add(new TextBlock { Text = sm?.Name ?? "", Foreground = TextBrush });
+            list.Items.Add(new ListBoxItem { Content = row, Foreground = TextBrush, MinHeight = 18 });
         }
 
         list.SelectedIndex = _materialSlot;
         list.SelectionChanged += (_, _) => { if (list.SelectedIndex >= 0) { _materialSlot = list.SelectedIndex; _shownId = -2; Refresh(); } };
-        _content.Children.Add(list);
-        if (slots.Count == 0) return;
-        int slot = _materialSlot;
-        var m = slots[slot];
-        _content.Children.Add(NameBox(m.Name, n => vp.UpdateMaterial(id, slot, x => x.Name = n)));
-
-        var surface = AddPanel("表面", "Surface", true);
-        surface.Body.Children.Add(Row(UiText.T("表面", "Surface"), Info(UiText.T("原理化 BSDF", "Principled BSDF"))));
-        string[] rgba = ["R", "G", "B"];
-        var swatch = new Border { Height = 20, CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(ToColor(m.BaseColor)), BorderBrush = DimText, BorderThickness = new Thickness(1) };
-        surface.Body.Children.Add(Row(UiText.T("基础色", "Base Color"), swatch));
-        for (int c = 0; c < 3; c++)
+        var slotButtons = new StackPanel { Width = 26, Margin = new Thickness(3, 0, 0, 0) };
+        slotButtons.Children.Add(FlatButton("+", UiText.T("添加材质槽", "Add Material Slot"), () => { if (vp.AddMaterialSlot(id)) _materialSlot = vp.GetSlots(id).Count - 1; }, 24));
+        slotButtons.Children.Add(FlatButton("−", UiText.T("移除材质槽", "Remove Material Slot"), () => vp.RemoveMaterialSlot(id, _materialSlot), 24));
+        foreach (UIElement b in slotButtons.Children) ((FrameworkElement)b).Margin = new Thickness(0, 0, 0, 2);
+        var slotRow = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+        DockPanel.SetDock(slotButtons, Dock.Right);
+        slotRow.Children.Add(slotButtons);
+        slotRow.Children.Add(list);
+        _content.Children.Add(slotRow);
+        if (slots.Count == 0)
         {
-            int ch = c;
-            var f = new NumberField { Step = 0.005, Min = 0, Max = 1, Format = v => v.ToString("0.000", CultureInfo.InvariantCulture), CornerTop = c == 0, CornerBottom = c == 2 };
-            f.Value = ch == 0 ? m.BaseColor.X : ch == 1 ? m.BaseColor.Y : m.BaseColor.Z;
-            void Set(double v)
-            {
-                vp.UpdateMaterial(id, slot, x =>
-                {
-                    var b = x.BaseColor;
-                    if (ch == 0) b.X = (float)v; else if (ch == 1) b.Y = (float)v; else b.Z = (float)v;
-                    x.BaseColor = b;
-                });
-                swatch.Background = new SolidColorBrush(ToColor(m.BaseColor));
-            }
-
-            f.Changing += Set;
-            f.Committed += Set;
-            surface.Body.Children.Add(Row(rgba[c], f));
+            _content.Children.Add(new TextBlock { Text = UiText.T("该物体没有网格，不能使用材质。", "This object has no mesh, so it can't use materials."), Foreground = DimText, Margin = new Thickness(4, 2, 0, 2) });
+            return;
         }
 
-        surface.Body.Children.Add(Scalar(UiText.T("金属度", "Metallic"), m.Metallic, v => vp.UpdateMaterial(id, slot, x => x.Metallic = (float)v)));
-        surface.Body.Children.Add(Scalar(UiText.T("糙度", "Roughness"), m.Roughness, v => vp.UpdateMaterial(id, slot, x => x.Roughness = (float)v)));
+        int slot = Math.Min(_materialSlot, slots.Count - 1);
+        var m = slots[slot].Material;
+
+        // Data-block row: browse | name | users | copy | X   (or browse | + New when the slot is empty)
+        var dataRow = new DockPanel { Height = 24, Margin = new Thickness(0, 0, 0, 6), LastChildFill = true };
+        var browse = new ComboBox { Width = 38, Height = 22, Margin = new Thickness(0, 0, 3, 0), ToolTip = UiText.T("浏览要关联的材质", "Browse Material to be linked") };
+        browse.Items.Add(new ComboBoxItem { Content = "●", IsEnabled = false, Visibility = Visibility.Collapsed });
+        foreach (var lm in vp.MaterialLibrary.Materials.ToList())
+        {
+            browse.Items.Add(new ComboBoxItem { Content = $"{lm.Name}  ({vp.UserCount(lm)})", Tag = lm });
+        }
+
+        browse.SelectedIndex = 0;
+        browse.SelectionChanged += (_, _) =>
+        {
+            if (browse.SelectedItem is ComboBoxItem { Tag: PvMaterial pick }) vp.AssignMaterial(id, slot, pick);
+        };
+        DockPanel.SetDock(browse, Dock.Left);
+        dataRow.Children.Add(browse);
+        if (m == null)
+        {
+            dataRow.Children.Add(FlatButton(UiText.T("+ 新建", "+ New"), UiText.T("新建材质", "Add a new material"), () => vp.NewMaterial(id, slot)));
+            _content.Children.Add(dataRow);
+            _content.Children.Add(new TextBlock
+            {
+                Text = UiText.T("空槽：显示为默认灰色材质。", "Empty slot: shown with the default grey material."),
+                Foreground = DimText, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 0, 0, 4), FontSize = 11,
+            });
+            return;
+        }
+
+        var unlink = FlatButton("✕", UiText.T("断开材质（槽变空）", "Unlink material"), () => vp.AssignMaterial(id, slot, null), 24);
+        DockPanel.SetDock(unlink, Dock.Right);
+        dataRow.Children.Add(unlink);
+        var copy = FlatButton("⧉", UiText.T("新建材质（复制当前材质）", "New material (copy of this one)"), () => vp.NewMaterial(id, slot), 24);
+        DockPanel.SetDock(copy, Dock.Right);
+        dataRow.Children.Add(copy);
+        int users = vp.UserCount(m);
+        if (users > 1)
+        {
+            var u = new TextBlock { Text = users.ToString(), Foreground = TextBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0), ToolTip = UiText.T("用户数", "Users") };
+            DockPanel.SetDock(u, Dock.Right);
+            dataRow.Children.Add(u);
+        }
+
+        var nameBox = NameBox(m.Name, n => vp.EditMaterial(m, x => x.Name = n));
+        nameBox.Margin = new Thickness(0);
+        dataRow.Children.Add(nameBox);
+        _content.Children.Add(dataRow);
+
+        // 预览 (P2: preview sphere)
+        var preview = AddPanel("预览", "Preview", false);
+        preview.Body.Children.Add(new TextBlock { Text = UiText.T("（预览球暂未实现）", "(Preview sphere not implemented yet)"), Foreground = DimText, Margin = new Thickness(8, 2, 0, 2) });
+
+        // 表(曲)面 = 原理化 BSDF
+        var surface = AddPanel("表(曲)面", "Surface", true);
+        surface.Body.Children.Add(Row(UiText.T("表(曲)面", "Surface"), Info(UiText.T("原理化 BSDF", "Principled BSDF"))));
+        var colorBar = new Border { Height = 20, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(ToColor(m.BaseColor)), Cursor = Cursors.Hand, ToolTip = UiText.T("点击打开取色器", "Click to pick a color") };
+        colorBar.MouseLeftButtonUp += (_, e) =>
+        {
+            ColorPicker.Open(colorBar, m.BaseColor, c => vp.EditMaterial(m, x => x.BaseColor = new Vector4(c.X, c.Y, c.Z, x.BaseColor.W), live: true),
+                () => vp.EditMaterial(m, _ => { }, live: false));
+            e.Handled = true;
+        };
+        surface.Body.Children.Add(Row(UiText.T("基础色", "Base Color"), colorBar));
+        _updaters.Add(() => colorBar.Background = new SolidColorBrush(ToColor(m.BaseColor)));
+        surface.Body.Children.Add(Scalar(UiText.T("金属度", "Metallic"), m.Metallic, (v, live) => vp.EditMaterial(m, x => x.Metallic = (float)v, live), () => m.Metallic));
+        surface.Body.Children.Add(Scalar(UiText.T("糙度", "Roughness"), m.Roughness, (v, live) => vp.EditMaterial(m, x => x.Roughness = (float)v, live), () => m.Roughness));
+        surface.Body.Children.Add(Scalar(UiText.T("折射率(IOR)", "IOR"), m.Ior, (v, live) => vp.EditMaterial(m, x => x.Ior = (float)v, live), () => m.Ior, min: 1, max: 4, fill: false));
+        surface.Body.Children.Add(Scalar("Alpha", m.BaseColor.W, (v, live) => vp.EditMaterial(m, x => x.BaseColor = Set(x.BaseColor, 3, (float)v), live), () => m.BaseColor.W));
+        foreach (var (zh, en) in new[] { ("漫射", "Diffuse"), ("次表面", "Subsurface"), ("高光", "Specular"), ("透射", "Transmission"), ("涂层", "Coat"), ("边缘光泽", "Sheen") })
+        {
+            var sub = AddPanel(zh, en, false, surface);
+            sub.Body.Children.Add(new TextBlock { Text = UiText.T("（暂未实现）", "(Not implemented yet)"), Foreground = DimText, Margin = new Thickness(8, 2, 0, 2) });
+        }
+
         var emission = AddPanel("自发光", "Emission", false, surface);
-        for (int c = 0; c < 3; c++)
+        var emissionBar = new Border { Height = 20, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(ToColor(new Vector4(m.EmissiveColor, 1))), Cursor = Cursors.Hand, ToolTip = UiText.T("点击打开取色器", "Click to pick a color") };
+        emissionBar.MouseLeftButtonUp += (_, e) =>
         {
-            int ch = c;
-            var cur = ch == 0 ? m.EmissionColor.X : ch == 1 ? m.EmissionColor.Y : m.EmissionColor.Z;
-            emission.Body.Children.Add(Scalar(c == 0 ? $"{UiText.T("颜色", "Color")} R" : rgba[c], cur, v => vp.UpdateMaterial(id, slot, x =>
-            {
-                var e = x.EmissionColor;
-                if (ch == 0) e.X = (float)v; else if (ch == 1) e.Y = (float)v; else e.Z = (float)v;
-                x.EmissionColor = e;
-            })));
-        }
-
-        emission.Body.Children.Add(Scalar(UiText.T("强度", "Strength"), m.EmissionStrength, v => vp.UpdateMaterial(id, slot, x => x.EmissionStrength = (float)v), max: 1000));
+            ColorPicker.Open(emissionBar, new Vector4(m.EmissiveColor, 1), c => vp.EditMaterial(m, x => x.EmissiveColor = new Vector3(c.X, c.Y, c.Z), live: true),
+                () => vp.EditMaterial(m, _ => { }, live: false));
+            e.Handled = true;
+        };
+        _updaters.Add(() => emissionBar.Background = new SolidColorBrush(ToColor(new Vector4(m.EmissiveColor, 1))));
+        emission.Body.Children.Add(Row(UiText.T("颜色", "Color"), emissionBar));
+        emission.Body.Children.Add(Scalar(UiText.T("强度", "Strength"), m.EmissiveStrength, (v, live) => vp.EditMaterial(m, x => x.EmissiveStrength = (float)v, live), () => m.EmissiveStrength, max: 1000, fill: false));
         surface.Body.Children.Add(new TextBlock
         {
-            Text = UiText.T("注：视口目前只显示基础色，金属度 / 糙度 / 自发光会保存在材质上，等着色器支持后生效。", "Note: the viewport shows Base Color only for now; Metallic / Roughness / Emission are stored for later."),
+            Text = UiText.T("实体模式只显示基础色；金属度、糙度、自发光要在材质预览或渲染模式下看。", "Solid mode shows Base Color only; switch to Material Preview or Rendered to see Metallic, Roughness and Emission."),
             Foreground = DimText, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 6, 0, 0), FontSize = 11,
         });
+
+        // Settings: blend mode, alpha cutoff, backface culling
+        var settings = AddPanel("设置", "Settings", true);
+        var mode = new ComboBox { Height = 22 };
+        mode.Items.Add(UiText.T("不透明", "Opaque"));
+        mode.Items.Add(UiText.T("裁剪（Alpha 剪切）", "Alpha Clip"));
+        mode.Items.Add(UiText.T("混合（Alpha 混合）", "Alpha Blend"));
+        mode.SelectedIndex = (int)m.AlphaMode;
+        mode.SelectionChanged += (_, _) => { if (mode.SelectedIndex >= 0 && mode.SelectedIndex != (int)m.AlphaMode) vp.EditMaterial(m, x => x.AlphaMode = (AlphaMode)mode.SelectedIndex); };
+        _updaters.Add(() => { if (mode.SelectedIndex != (int)m.AlphaMode) mode.SelectedIndex = (int)m.AlphaMode; });
+        settings.Body.Children.Add(Row(UiText.T("混合模式", "Blend Mode"), mode));
+        settings.Body.Children.Add(Scalar(UiText.T("裁剪阈值", "Alpha Cutoff"), m.AlphaCutoff, (v, live) => vp.EditMaterial(m, x => x.AlphaCutoff = (float)v, live), () => m.AlphaCutoff));
+        var cull = Check(UiText.T("背面剔除", "Backface Culling"), !m.DoubleSided, v => { if (m.DoubleSided != !v) vp.EditMaterial(m, x => x.DoubleSided = !v); });
+        _updaters.Add(() => { if (cull.IsChecked != !m.DoubleSided) cull.IsChecked = !m.DoubleSided; });
+        settings.Body.Children.Add(Row("", cull));
         Placeholder("体积（音量）", "Volume");
-        Placeholder("设置", "Settings");
         Placeholder("视图显示", "Viewport Display");
         Placeholder("自定义属性", "Custom Properties");
     }
 
-    static Grid Scalar(string label, double value, Action<double> set, double max = 1)
+    static float Get(Vector4 v, int c) => c == 0 ? v.X : c == 1 ? v.Y : c == 2 ? v.Z : v.W;
+    static float Get(Vector3 v, int c) => c == 0 ? v.X : c == 1 ? v.Y : v.Z;
+    static Vector4 Set(Vector4 v, int c, float x) { if (c == 0) v.X = x; else if (c == 1) v.Y = x; else if (c == 2) v.Z = x; else v.W = x; return v; }
+    static Vector3 Set(Vector3 v, int c, float x) { if (c == 0) v.X = x; else if (c == 1) v.Y = x; else v.Z = x; return v; }
+
+    static Button FlatButton(string text, string tip, Action click, double width = double.NaN)
     {
-        var f = new NumberField { Step = max > 1 ? 0.05 : 0.005, Min = 0, Max = max, Format = v => v.ToString("0.000", CultureInfo.InvariantCulture), CornerTop = true, CornerBottom = true, Value = value };
-        f.Changing += set;
-        f.Committed += set;
+        var b = new Button { Content = text, ToolTip = tip, Width = width, Height = 22, Margin = new Thickness(3, 0, 0, 0), Focusable = false, Background = FieldBg, Foreground = TextBrush, BorderThickness = new Thickness(0) };
+        b.Click += (_, _) => click();
+        return b;
+    }
+
+    /// <summary>0-1 (or 0-max) slider field: drag = live (one undo step on release), typing = one step.</summary>
+    Grid Scalar(string label, double value, Action<double, bool> set, Func<double> current, double max = 1, bool top = true, bool bottom = true, double min = 0, bool fill = true)
+    {
+        var f = new NumberField { Step = max - min > 1 ? 0.01 * Math.Min(max - min, 5) : 0.005, Min = min, Max = max, ShowFill = fill, Format = v => v.ToString("0.000", CultureInfo.InvariantCulture), CornerTop = top, CornerBottom = bottom, Value = value };
+        f.Changing += v => set(v, true);
+        f.Committed += v => set(v, false);
+        _updaters.Add(() => { if (!f.IsBusy) f.Value = current(); });
         return Row(label, f);
     }
 
-    static Color ToColor(Vector4 c) => Color.FromRgb((byte)(Math.Clamp(c.X, 0, 1) * 255), (byte)(Math.Clamp(c.Y, 0, 1) * 255), (byte)(Math.Clamp(c.Z, 0, 1) * 255));
+    /// <summary>Linear colour to the sRGB swatch colour.</summary>
+    static Color ToColor(Vector4 c)
+    {
+        static byte E(float v)
+        {
+            v = Math.Clamp(v, 0f, 1f);
+            double s = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.Pow(v, 1 / 2.4) - 0.055;
+            return (byte)Math.Round(s * 255);
+        }
+
+        return Color.FromRgb(E(c.X), E(c.Y), E(c.Z));
+    }
 
     // ---------------- Scene / others ----------------
 
@@ -711,6 +808,18 @@ public sealed class PropertiesEditor : UserControl
 public sealed class NumberField : Border
 {
     readonly TextBlock _text = new() { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White };
+    readonly Border _fill = new() { HorizontalAlignment = HorizontalAlignment.Left, Background = new SolidColorBrush(Color.FromRgb(0x47, 0x72, 0xB3)), Width = 0 };
+    readonly Grid _face = new();
+    bool _showFill;
+
+    /// <summary>Blender factor slider: blue fill from Min to the value (needs finite Min / Max).</summary>
+    public bool ShowFill { get => _showFill; set { _showFill = value; UpdateFill(); } }
+
+    void UpdateFill()
+    {
+        if (!_showFill || !double.IsFinite(Min) || !double.IsFinite(Max) || Max <= Min || ActualWidth <= 0) { _fill.Width = 0; return; }
+        _fill.Width = Math.Clamp((_value - Min) / (Max - Min), 0, 1) * ActualWidth;
+    }
     double _value;
     double _start;
     Point _press;
@@ -736,7 +845,11 @@ public sealed class NumberField : Border
         Height = 22;
         Margin = new Thickness(0, 0, 0, 1);
         Background = new SolidColorBrush(Color.FromRgb(0x54, 0x54, 0x54));
-        Child = _text;
+        _face.Children.Add(_fill);
+        _face.Children.Add(_text);
+        Child = _face;
+        ClipToBounds = true;
+        SizeChanged += (_, _) => UpdateFill();
         Cursor = Cursors.SizeWE;
         MouseEnter += (_, _) => { if (_edit == null) Background = new SolidColorBrush(Color.FromRgb(0x65, 0x65, 0x65)); };
         MouseLeave += (_, _) => { if (_edit == null) Background = new SolidColorBrush(Color.FromRgb(0x54, 0x54, 0x54)); };
@@ -749,6 +862,7 @@ public sealed class NumberField : Border
         {
             _value = value;
             _text.Text = Format(value);
+            UpdateFill();
         }
     }
 
@@ -836,7 +950,7 @@ public sealed class NumberField : Border
         if (_edit == null) return;
         var text = _edit.Text.Replace("m", "").Replace("°", "").Trim();
         _edit = null;
-        Child = _text;
+        Child = _face;
         Cursor = Cursors.SizeWE;
         Background = new SolidColorBrush(Color.FromRgb(0x54, 0x54, 0x54));
         if (commit && TryEval(text, out var v) && double.IsFinite(v))

@@ -17,6 +17,8 @@ public sealed class ProjectDocument
     public ProjectCollection Collection { get; set; } = new();
     /// <summary>Scene Collection tree (nested collections + object ids). Null in old projects: everything goes into "Collection".</summary>
     public ProjectCollectionNode? SceneCollection { get; set; }
+    /// <summary>Material data-blocks (docs/13). Null in old projects: every slot stays empty (default grey).</summary>
+    public List<ProjectMaterial>? Materials { get; set; }
     public ProjectView View { get; set; } = new();
     public ProjectSelection Selection { get; set; } = new();
 }
@@ -47,6 +49,24 @@ public sealed class ProjectObject
     public List<int> HiddenNodes { get; set; } = [];
     public List<int> RenderOffNodes { get; set; } = [];     // -1 = the object row itself
     public List<int> ExpandedNodes { get; set; } = [];      // -1 = the object row itself
+    /// <summary>Material id per slot (null = empty slot). Null in old projects.</summary>
+    public List<string?>? MaterialSlots { get; set; }
+}
+
+public sealed class ProjectMaterial
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "Material";
+    public float[] BaseColor { get; set; } = [0.8f, 0.8f, 0.8f, 1f];  // linear RGBA
+    public float Metallic { get; set; }
+    public float Roughness { get; set; } = 0.5f;
+    public float Ior { get; set; } = 1.5f;
+    public float[] Emission { get; set; } = [1, 1, 1];
+    public float EmissionStrength { get; set; }
+    public string AlphaMode { get; set; } = "Opaque";
+    public float AlphaCutoff { get; set; } = 0.5f;
+    public bool DoubleSided { get; set; }
+    public bool FakeUser { get; set; }
 }
 
 public sealed class ProjectLight

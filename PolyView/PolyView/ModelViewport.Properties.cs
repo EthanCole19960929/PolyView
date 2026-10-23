@@ -56,23 +56,11 @@ public static class EulerOrder
     }
 }
 
-/// <summary>Editable material values for one slot (Principled BSDF subset). Base color is written to vertex colors.</summary>
-public sealed class MaterialSlotProps
-{
-    public string Name { get; set; } = "Material";
-    public Vector4 BaseColor { get; set; } = Vector4.One;
-    public float Metallic { get; set; }
-    public float Roughness { get; set; } = 0.5f;
-    public Vector3 EmissionColor { get; set; } = Vector3.Zero;
-    public float EmissionStrength { get; set; } = 1f;
-}
-
 /// <summary>Properties-editor backend: rotation mode, transform locks, live (scrub) transforms with one undo step, materials.</summary>
 public partial class ModelViewport
 {
     readonly Dictionary<int, string> _rotationModes = [];
     readonly Dictionary<int, bool[]> _locks = [];
-    readonly Dictionary<MeshData, List<MaterialSlotProps>> _materials = [];
     int _liveId = -1;
     ObjectTransform _liveStart;
 
@@ -159,78 +147,5 @@ public partial class ModelViewport
         return (o.VertexCount, edges.Count, o.TriangleCount, o.TriangleCount);
 
         static void AddEdge(HashSet<long> set, uint a, uint b) => set.Add(a < b ? ((long)a << 32) | b : ((long)b << 32) | a);
-    }
-
-    /// <summary>Material slots, grouped like the outliner: one per distinct texture index of the mesh parts.</summary>
-    List<int[]> SlotParts(MeshData mesh)
-    {
-        var groups = new List<int[]>();
-        if (mesh.Parts.Length == 0) { groups.Add([-1]); return groups; }
-        foreach (var key in mesh.Parts.Select(p => p.TextureIndex).Distinct())
-        {
-            groups.Add(Enumerable.Range(0, mesh.Parts.Length).Where(i => mesh.Parts[i].TextureIndex == key).ToArray());
-        }
-
-        return groups;
-    }
-
-    IEnumerable<uint> SlotIndices(MeshData mesh, int[] parts)
-    {
-        if (parts.Length == 1 && parts[0] < 0) return mesh.Indices;
-        return parts.SelectMany(p => mesh.Indices.Skip(mesh.Parts[p].StartIndex).Take(mesh.Parts[p].IndexCount));
-    }
-
-    public IReadOnlyList<MaterialSlotProps> GetMaterials(int id)
-    {
-        if (!TryGetObject(id, out var o)) return [];
-        if (_materials.TryGetValue(o.Mesh, out var list)) return list;
-        list = [];
-        var groups = SlotParts(o.Mesh);
-        for (int i = 0; i < groups.Count; i++)
-        {
-            var first = SlotIndices(o.Mesh, groups[i]).Cast<uint?>().FirstOrDefault();
-            var c = first is uint v && v < o.Mesh.Vertices.Length ? o.Mesh.Vertices[v].Color : 0xFFFFFFFF;
-            list.Add(new MaterialSlotProps
-            {
-                Name = i == 0 ? "Material" : $"Material.{i:000}",
-                BaseColor = new Vector4(c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF, (c >> 24) & 0xFF) / 255f,
-            });
-        }
-
-        _materials[o.Mesh] = list;
-        return list;
-    }
-
-    /// <summary>Apply a slot's values; base color is baked into the vertex colors and re-uploaded for every user of the mesh.</summary>
-    public bool UpdateMaterial(int id, int slot, Action<MaterialSlotProps> edit)
-    {
-        var list = GetMaterials(id);
-        if (slot < 0 || slot >= list.Count || !TryGetObject(id, out var o)) return false;
-        var before = list[slot].BaseColor;
-        edit(list[slot]);
-        if (list[slot].BaseColor != before)
-        {
-            uint packed = Vertex.PackColor(list[slot].BaseColor);
-            var verts = o.Mesh.Vertices;
-            foreach (var i in SlotIndices(o.Mesh, SlotParts(o.Mesh)[slot]).Distinct())
-            {
-                if (i < verts.Length) verts[i].Color = packed;
-            }
-
-            if (_renderer != null)
-            {
-                foreach (var user in _objects.Where(x => ReferenceEquals(x.Mesh, o.Mesh)))
-                {
-                    _renderer.AddMesh(user.Id, user.Mesh);
-                    _renderer.SetWorld(user.Id, user.World);
-                    _renderer.SetVisible(user.Id, user.Visible);
-                }
-            }
-
-            Invalidate();
-        }
-
-        ObjectChanged?.Invoke(this, id);
-        return true;
     }
 }

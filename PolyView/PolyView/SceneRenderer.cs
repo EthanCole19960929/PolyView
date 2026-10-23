@@ -36,7 +36,27 @@ public sealed partial class SceneRenderer : IDisposable
             LightItem Items[16];
         };
 
-        Texture2D BaseColorMap : register(t0);
+        // Material data-block (docs/13 part 2 §3). Flags: bits 0-1 alpha mode (0 opaque, 1 mask, 2 blend),
+        // bit 2 = slot has a material (use MatBaseColor instead of the vertex colour), bit 3 = double sided.
+        cbuffer MaterialCB : register(b2)
+        {
+            float4 MatBaseColor;
+            float3 MatEmissive;      // colour * strength, linear
+            float MatMetallic;
+            float MatRoughness;
+            float MatNormalScale;
+            float MatAlphaCutoff;
+            float MatOcclusion;
+            uint MatFlags;
+            float MatIor;
+            float2 MatPad;
+        };
+
+        Texture2D BaseColorMap : register(t0);       // sRGB content
+        Texture2D MetalRoughMap : register(t1);      // G roughness, B metallic
+        Texture2D NormalMap : register(t2);          // (P1: tangent space)
+        Texture2D OcclusionMap : register(t3);       // R
+        Texture2D EmissiveMap : register(t4);        // sRGB content
         SamplerState BaseColorSampler : register(s0);
 
         struct VsIn
@@ -57,7 +77,7 @@ public sealed partial class SceneRenderer : IDisposable
         };
 
         // 选中描边：先把选中对象画进 R8 掩码，再全屏找掩码边缘（2 像素外扩），Blender 活动物体色 #FFA028。
-        Texture2D<float> SelectionMask : register(t1);
+        Texture2D<float> SelectionMask : register(t5);
 
         float4 PSMask(VsOut input) : SV_Target
         {
@@ -131,13 +151,47 @@ public sealed partial class SceneRenderer : IDisposable
                 normal = -normal;
             }
 
-            // 主光跟着相机（右上方斜照），再加天空 / 地面半球环境光，背光面也不会比背景还黑。
+            float4 tex = BaseColorMap.Sample(BaseColorSampler, input.TexCoord);
+            bool hasMaterial = (MatFlags & 4) != 0;
+            float4 baseColor = hasMaterial ? MatBaseColor : input.Color;
+            float alpha = baseColor.a * tex.a;
+            uint alphaMode = MatFlags & 3;
+            if (alphaMode == 1)
+            {
+                clip(alpha - MatAlphaCutoff);
+            }
+
+            float outAlpha = alphaMode == 2 ? saturate(alpha) : 1;
+            float3 viewDir = normalize(EyePosition - input.WorldPos);
+
+            if (abs(Ambient.w - 2) < 0.5)
+            {
+                // Blender Solid studio light, linear space, one sRGB encode (SceneRenderer.Shading.cs). No textures.
+                return float4(StudioSolid(normal, viewDir, LightDirection, baseColor.rgb), outAlpha);
+            }
+
+            // Material Preview / Rendered: Cook-Torrance GGX (SceneRenderer.Pbr.cs).
+            float3 albedo = baseColor.rgb * SrgbToLinear(tex.rgb);
+            if (!hasMaterial && all(albedo > 0.999))
+            {
+                albedo = SolidDefaultAlbedo.xxx;
+            }
+
+            float4 mr = MetalRoughMap.Sample(BaseColorSampler, input.TexCoord);
+            PbrSurface surf;
+            surf.N = normal;
+            surf.V = viewDir;
+            surf.Albedo = albedo;
+            surf.Metallic = saturate(MatMetallic * mr.b);
+            surf.Roughness = clamp(MatRoughness * mr.g, 0.045, 1);
+            surf.Ior = MatIor;
+            float ao = lerp(1, OcclusionMap.Sample(BaseColorSampler, input.TexCoord).r, MatOcclusion);
+            float3 emissive = MatEmissive * SrgbToLinear(EmissiveMap.Sample(BaseColorSampler, input.TexCoord).rgb);
+            float3 sum = 0;
             if (abs(Ambient.w - 1) < 0.5)
             {
-                // Scene lights (docs/07 §4.2): Lambert + small Blinn-Phong, inverse-square falloff, no shadows.
-                float4 baseColor = BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
-                float3 viewDir = normalize(EyePosition - input.WorldPos);
-                float3 sum = baseColor.rgb * Ambient.rgb;
+                // Scene lights (docs/07 §4.2): inverse-square falloff, no shadows. Radiance already includes 1/pi.
+                sum += PbrAmbient(surf, Ambient.rgb, Ambient.rgb) * ao;
                 int count = (int)LightCount.x;
                 for (int i = 0; i < count; i++)
                 {
@@ -176,18 +230,22 @@ public sealed partial class SceneRenderer : IDisposable
                         radiance = li.ColorPower.rgb * atten;
                     }
 
-                    float ndl = saturate(dot(normal, L));
-                    float spec = pow(saturate(dot(normal, normalize(L + viewDir))), 48) * 0.15;
-                    sum += (baseColor.rgb + spec) * radiance * ndl;
+                    sum += PbrDirect(surf, normalize(L), radiance);
                 }
-
-                // Soft exposure curve so 1000 W lights do not clip hard.
-                return float4(1 - exp(-sum), 1);
+            }
+            else
+            {
+                // Material Preview: built-in studio (camera-following key + fill + sky/ground hemisphere), no scene lights.
+                float3 key = normalize(lerp(LightDirection, float3(0, 1, 0), 0.4));
+                float3 fill = normalize(float3(-key.x, 0.3, -key.z) + 1e-5);
+                sum += PbrAmbient(surf, PreviewSky, PreviewGround) * ao;
+                sum += PbrDirect(surf, key, PreviewKey.xxx);
+                sum += PbrDirect(surf, fill, PreviewFill.xxx);
             }
 
-            // Blender Solid studio light, linear space, one sRGB encode (SceneRenderer.Shading.cs).
-            float3 albedo = abs(Ambient.w - 2) < 0.5 ? input.Color.rgb : SrgbToLinear(BaseColorMap.Sample(BaseColorSampler, input.TexCoord).rgb) * input.Color.rgb;
-            return float4(StudioSolid(normal, normalize(EyePosition - input.WorldPos), LightDirection, albedo), 1);
+            sum += emissive;
+            // Soft exposure curve, then one sRGB encode.
+            return float4(LinearToSrgb(1 - exp(-sum)), outAlpha);
         }
         """;
 
@@ -328,6 +386,7 @@ public sealed partial class SceneRenderer : IDisposable
             TextureAddressMode.Wrap,
             TextureAddressMode.Wrap));
         (_whiteTexture, _whiteView) = CreateTexture(1, 1, [255, 255, 255, 255]);
+        InitMaterials();
     }
 
     unsafe (ID3D11Texture2D Texture, ID3D11ShaderResourceView View) CreateTexture(int width, int height, byte[] bgra)
@@ -551,9 +610,9 @@ public sealed partial class SceneRenderer : IDisposable
         WriteConstants(Matrix4x4.Identity, _lastViewProjection, _lastLight, unlit: false, highlight: OutlineWhite ? 1f : 0f);
         _context.PSSetShader(_outlineShader);
         _maskSlot[0] = _maskResource;
-        _context.PSSetShaderResources(1, 1, _maskSlot);
+        _context.PSSetShaderResources(5, 1, _maskSlot);
         _context.Draw(3, 0);
-        _context.PSSetShaderResources(1, 1, _nullSlot);
+        _context.PSSetShaderResources(5, 1, _nullSlot);
         _context.OMSetBlendState(null);
         _context.IASetInputLayout(_layout);
         _context.VSSetShader(_vertexShader);
@@ -816,50 +875,7 @@ public sealed partial class SceneRenderer : IDisposable
         _offset[0] = 0;
         _samplerSlot[0] = _sampler;
         _context.PSSetSamplers(0, 1, _samplerSlot);
-        var sceneWorld = Matrix4x4.CreateScale(scale);
-        // for 循环 + 预分配的槽数组：渲染循环里不产生托管分配。
-        for (int o = 0; o < _objects.Count; o++)
-        {
-            var gpu = _objects[o];
-            if (gpu.IndexCount <= 0 || !gpu.Visible)
-            {
-                continue;
-            }
-
-            bool selected = IsSelected(gpu.Id);
-            var objectWorld = gpu.World * sceneWorld;
-            float written = -1f;
-            _vertexSlot[0] = gpu.Vertices;
-            _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
-            _context.IASetIndexBuffer(gpu.Indices, Format.R32_UInt, 0);
-            var parts = gpu.Parts;
-            for (int p = 0; p < parts.Length; p++)
-            {
-                var part = parts[p];
-                if (part.IndexCount <= 0 || part.StartIndex + part.IndexCount > gpu.IndexCount
-                    || (gpu.PartHidden != null && p < gpu.PartHidden.Length && gpu.PartHidden[p]))
-                {
-                    continue;
-                }
-
-                // 选中整个对象时全部高亮；选中某个节点时只高亮该节点（含子节点）的部件。
-                float highlight = selected && (gpu.PartHighlight == null || (p < gpu.PartHighlight.Length && gpu.PartHighlight[p])) ? 1f : 0f;
-                if (highlight != written)
-                {
-                    WriteConstants(objectWorld, viewProjection, light, unlit: false, highlight);
-                    written = highlight;
-                }
-
-                _context.RSSetState(part.DoubleSided
-                    ? (Wireframe ? _doubleSidedWireRasterizer : _doubleSidedRasterizer)
-                    : (Wireframe ? _wireRasterizer : _rasterizer));
-                _textureSlot[0] = part.TextureIndex >= 0 && part.TextureIndex < gpu.Textures.Count
-                    ? gpu.Textures[part.TextureIndex].View
-                    : _whiteView;
-                _context.PSSetShaderResources(0, 1, _textureSlot);
-                _context.DrawIndexed((uint)part.IndexCount, (uint)part.StartIndex, 0);
-            }
-        }
+        DrawMeshes(Matrix4x4.CreateScale(scale), viewProjection, light);
 
         if (ShowGrid && _gridVertices != null)
         {
@@ -935,6 +951,7 @@ public sealed partial class SceneRenderer : IDisposable
     public void Dispose()
     {
         ClearMeshes();
+        DisposeMaterials();
         _gpuIdleQuery?.Dispose();
         _gridVertices?.Dispose();
         _colorView?.Dispose();
@@ -990,7 +1007,7 @@ public sealed partial class SceneRenderer : IDisposable
 
     static byte[] Compile(string entry, string profile)
     {
-        var source = System.Text.Encoding.UTF8.GetBytes(ShadingSource + ShaderSource);
+        var source = System.Text.Encoding.UTF8.GetBytes(ShadingSource + PbrSource + ShaderSource);
         int hr = D3DCompile(source, (nuint)source.Length, "mesh.hlsl", IntPtr.Zero, IntPtr.Zero, entry, profile, 0, 0, out var code, out var errors);
         try
         {
@@ -1093,6 +1110,9 @@ public sealed partial class SceneRenderer : IDisposable
         public bool[]? PartHidden;
         public bool[]? PartHighlight;
         public MeshPart[] Parts = [];
+        /// <summary>Per material slot shader values (pushed every frame by the viewport) and part -> slot map.</summary>
+        public MaterialParams[] Materials = [];
+        public int[]? PartSlots;
         public readonly List<(ID3D11Texture2D Texture, ID3D11ShaderResourceView View)> Textures = [];
 
         public void Dispose()

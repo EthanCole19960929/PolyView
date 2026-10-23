@@ -229,7 +229,7 @@ public partial class OutlinerPanel : UserControl
             int materials = _viewport.GetMaterialCount(id);
             for (int m = 0; m < materials; m++)
             {
-                data.Add(new OutlinerItem(this, OutlinerKind.Material, m == 0 ? "Material" : $"Material.{m:000}", id, -3 - m));
+                data.Add(new OutlinerItem(this, OutlinerKind.Material, _viewport.GetSlotDisplayName(id, m), id, -3 - m));
             }
         }
     }

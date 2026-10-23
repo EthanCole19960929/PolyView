@@ -19,6 +19,9 @@ public sealed class SceneObject
     /// <summary>被隐藏的节点下标（MeshData.Nodes）。</summary>
     public HashSet<int> HiddenNodes { get; } = [];
 
+    /// <summary>Material slots (Blender Link = Object). Filled lazily: one slot per part group, empty = default grey.</summary>
+    public List<MaterialSlot> MaterialSlots { get; } = [];
+
     /// <summary>对象变换（不烘焙进顶点）。导入后顶点已平移到以包围盒中心为原点，Position = 原中心。</summary>
     public ObjectTransform Transform = ObjectTransform.Identity;
 
