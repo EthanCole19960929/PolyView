@@ -20,9 +20,15 @@ public partial class MainWindow : Window
         Viewport.ViewChanged += (_, _) => UpdateStatus();
         Outliner.Attach(Viewport);
         ApplyLanguage();
+        InitProject();
 
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
         // 性能测试：PolyView.exe --bench 模型路径 结果文件（追加一行制表符分隔的结果后自动退出）
+        if (args.Length >= 2 && args[0] == "--project-selftest")
+        {
+            Environment.Exit(Project.ProjectSelfTest.Run(System.IO.Path.GetFullPath(args[1])));
+        }
+
         if (args.Length >= 3 && args[0] == "--bench")
         {
             Viewport.StartBenchmark(System.IO.Path.GetFullPath(args[1]), System.IO.Path.GetFullPath(args[2]));
@@ -30,7 +36,7 @@ public partial class MainWindow : Window
         }
 
         // 支持「打开方式」或命令行：PolyView.exe 模型1 [模型2 ...]，多个文件一起打开
-        var startup = args.Where(a => MeshImporter.IsSupported(a) && System.IO.File.Exists(a))
+        var startup = OpenProjectsIn(args.Where(System.IO.File.Exists)).Where(a => MeshImporter.IsSupported(a) && System.IO.File.Exists(a))
             .Select(System.IO.Path.GetFullPath)
             .ToArray();
         if (startup.Length > 0)
@@ -42,6 +48,7 @@ public partial class MainWindow : Window
     void ApplyLanguage()
     {
         Title = UiText.WindowTitle;
+        ApplyProjectLanguage();
         MenuFile.Header = UiText.MenuFile;
         MenuNew.Header = UiText.MenuNew;
         MenuOpen.Header = UiText.MenuOpen;
@@ -151,6 +158,12 @@ public partial class MainWindow : Window
 
         // Alt 组合键时 WPF 给的是 Key.System，真实按键在 SystemKey 里。
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (TryHandleProjectKey(key, Keyboard.Modifiers))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (Keyboard.Modifiers == ModifierKeys.Control && key == Key.O)
         {
             OpenButton_Click(this, new RoutedEventArgs());
@@ -212,11 +225,15 @@ public partial class MainWindow : Window
 
     void OpenButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = UiText.FileFilter, Multiselect = true };
+        var dialog = new OpenFileDialog { Filter = UiText.OpenAnyFilter + UiText.FileFilter, Multiselect = true };
         if (dialog.ShowDialog(this) == true)
         {
             // 多选：第一个替换场景，其余追加为新对象（各自有 id，可点选）。
-            Viewport.LoadPaths(dialog.FileNames);
+            var models = OpenProjectsIn(dialog.FileNames);
+            if (models.Length > 0)
+            {
+                Viewport.LoadPaths(models);
+            }
         }
     }
 
@@ -266,7 +283,11 @@ public partial class MainWindow : Window
 
         _notice = null;
         // 一次拖入多个文件：一起打开（第一个替换场景，其余追加）。
-        Viewport.LoadPaths(paths);
+        var models = OpenProjectsIn(paths);
+        if (models.Length > 0)
+        {
+            Viewport.LoadPaths(models);
+        }
         Activate();
     }
 
@@ -280,6 +301,6 @@ public partial class MainWindow : Window
             return [];
         }
 
-        return files.Where(MeshImporter.IsSupported).ToArray();
+        return files.Where(IsOpenable).ToArray();
     }
 }

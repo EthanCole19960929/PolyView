@@ -23,6 +23,7 @@ public partial class MainWindow
         Viewport.SceneChanged += (_, _) => MarkProjectDirty();
         Viewport.ObjectChanged += (_, _) => MarkProjectDirty();
         Closing += OnProjectClosing;
+        FileAssociation.EnsureRegistered();
         MenuSave.IsEnabled = true;
         MenuSave.Click += (_, _) => SaveProject(saveAs: false);
         _menuSaveAs = new MenuItem { InputGestureText = "Ctrl+Shift+S" };
