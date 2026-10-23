@@ -1008,7 +1008,7 @@ public sealed partial class ModelViewport
 
         _modalText.Text = status;
         UpdateModalOverlay(mouse, center);
-        ApplyTransform(o, t, commit: false);
+        ApplyTransform(o, ApplyLocks(o.Id, _xformStart, t), commit: false);
     }
 
     void CommitTransform()

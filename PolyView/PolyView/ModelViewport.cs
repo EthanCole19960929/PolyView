@@ -400,6 +400,11 @@ public sealed partial class ModelViewport : UserControl
             return true;
         }
 
+        if (HandleContextMenuKey(key, modifiers))
+        {
+            return true;
+        }
+
         if (HandleCollectionKey(key, modifiers))
         {
             return true;

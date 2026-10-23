@@ -15,6 +15,7 @@ PolyView 是一个用 C# 写的轻量 Windows 3D 模型查看器：WPF 做界面
 | 03 | [03_3D显示原理与优化.md](03_3D显示原理与优化.md) | 小U | 2026-10-23 | 3D 显示原理与优化草稿（容量数字为估算） |
 | 04 | [04_渲染原理与优化.md](04_渲染原理与优化.md) | 小B、小U | 2026-10-23 | 按实际代码写的渲染流程、相机和光照、已做 / 待做优化、实测容量、格式和 Draco 说明；第 2 阶段多对象 / 拾取 / 高亮及实测、给场景树的接口 |
 | 05 | [05_变换操纵轴规格.md](05_变换操纵轴规格.md) | novel | 2026-10-23 | Blender 式选择/移动/旋转/缩放工具与手柄、快捷键、对象 TRS 数据模型、拾取接口、场景大纲、验收清单 |
+| 00 | [00_功能规划与进度.md](00_功能规划与进度.md) | program | 2026-10-23 | 总体功能规划：各模块 ✅/🚧/⏳/❌ 状态表和优先级，右键菜单明细 |
 | 06 | [06_开发进度.md](06_开发进度.md) | program | 2026-10-23 | 已完成 / 进行中 / 计划、分工和创新点（按 master git log） |
 | 07 | [07_灯光规格.md](07_灯光规格.md) | novel | 2026-10-23 | 对齐 Blender 的灯光类型（Point/Sun/Spot/Area）与 World 环境光、glTF/Assimp 导入映射、视口图标、着色模式、数据模型、分工与验收 |
 | 08 | [08_开源项目借鉴.md](08_开源项目借鉴.md) | novel | 2026-10-23 | 借鉴 Helix Toolkit / Stride / ImGuizmo / Flax 源码：选中描边、无限网格遮挡、手柄几何与拖拽数学、撤销/重做、大纲树、灯光图标、BVH 拾取、吸附，按 P0/P1/P2 对到 PolyView 类和负责人 |
@@ -131,7 +132,7 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 ## 协作方式（多 bot）
 
 - 用户的需求交给 program，program 拆分并分派给各 bot；其他 bot 也可以写代码，但各自只负责分到的文件和功能块。
-- 每次开工先读 `docs/AGENTS.md` 和 `docs/06_开发进度.md`。
+- 每次开工先读 `docs/AGENTS.md` 、`docs/00_功能规划与进度.md`（总体规划和各模块状态）和 `docs/06_开发进度.md`。
 - **README.md 只能用英文写，不要在 README 里加中文。** README.md must be written in English only. Do not add Chinese text to README.（中文说明请放到 `README.zh-CN.md` 或 `docs\` 里。）
 
 ## Git 规则

@@ -8,7 +8,7 @@ public sealed class SceneObject
     public required int Id { get; init; }
     public required string Name { get; set; }
     public string? SourcePath { get; init; }
-    public required MeshData Mesh { get; init; }
+    public required MeshData Mesh { get; set; }
 
     /// <summary>Center subtracted from the vertices at import (node / light matrices are still in file space).</summary>
     public Vector3 ImportOffset { get; init; }
