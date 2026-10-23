@@ -135,6 +135,14 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 - 不提交编译产物：`.gitignore` 已忽略 `bin/`、`obj/`、`.vs/`、`*.user`、`/_旧版备份/`。注意 `[Oo]bj/` 也会忽略名叫 `obj` 的模型目录，所以 `Models/` 保持平铺。
 - 本机推送 GitHub 若报 TLS 错误，用 `git -c http.sslBackend=schannel push ...`。
 
+### 共同在 master 开发的防干扰规则
+
+1. 按文件分工：program 负责渲染 / 手柄 / 场景列表（SceneRenderer、Gizmo、Outliner），PolyView软件开发 负责导入，english 负责 `UiText.cs`，novel 负责 `docs/`。要改别人负责的文件，先在群里说一声。
+2. 只用 `git add <具体文件>`，禁止 `git add .` / `git add -A`，不提交别人改了一半的文件。
+3. 改动前先 `git pull --rebase`；编译通过立刻提交推送，小步提交，不留半成品。
+4. 编译不过不推，禁止 `--force`。
+5. 公共文件（`MainWindow.xaml`、`.csproj`、`.slnx`）同一时间只允许一人修改，改前先在群里认领。
+
 ## 当前进度（2026-10-23）
 
 - 已在 master：OBJ / STL / GLB / glTF 导入，拖放打开，命令行打开，修复视口全黑（矩阵转置），中英文切换。
