@@ -20,7 +20,7 @@ Built with C# / WPF and Direct3D 11
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs welcome">
 </p>
 
-**English** | [简体中文](README.zh-CN.md)
+**English** | [Simplified Chinese](README.zh-CN.md)
 
 [✨ Features](#-features) •
 [🛠️ Tech Stack](#️-tech-stack) •
@@ -30,20 +30,20 @@ Built with C# / WPF and Direct3D 11
 
 </div>
 
-## ✨ 项目亮点 / Highlights
+## ✨ Highlights
 
-**🤖 内置 MCP：AI 可以直接操控 PolyView / Built-in MCP — AI can drive PolyView directly**
+**🤖 Built-in MCP: AI can drive PolyView directly**
 
-- **零配置 / Zero config**：PolyView 启动时自动开启本机 MCP 服务 `http://127.0.0.1:47800/mcp`（Streamable HTTP，只监听本机）。The MCP server starts with the app, localhost only.
-- **扫描 + 一键连接 / Scan & one-click connect**：在「编辑 › 偏好设置 › AI / MCP」中点「扫描」，会列出本机的 AI 客户端（是否已安装、运行中、已连接）。勾选后点「一键连接」，PolyView 会把 `polyview` 条目合并进它们的配置文件，不会动其他条目，第一次修改前会留一份 `.polyview.bak` 备份。目前能自动写入的有 Cursor、Claude Code、Claude Desktop（通过 `npx mcp-remote`）、VS Code、Windsurf、Trae、Gemini CLI、Codex CLI。Cherry Studio 和豆包需要手动粘贴配置。Scan lists installed/running/connected AI clients; connect merges a `polyview` entry safely (other entries kept, one-time `.polyview.bak`).
-- **通用配置 / Any MCP client**：一键复制 HTTP 配置或 stdio（`npx mcp-remote`）配置，可以粘贴到任何支持 MCP 的客户端（例如在 Cherry Studio 里接入 DeepSeek 等模型）。Copy-config buttons work for any MCP client.
-- **命令系统 / Command registry**：参考 Blender operator，每个功能都注册成一个命令（如 `object.add_primitive`、`file.export`）。AI 通过 `list_commands` / `describe_command` / `run_command` 调用全部命令；`get_scene`、`get_viewport_screenshot`（让 AI 看到视口）以及常用快捷工具 `add_primitive`、`add_light`、`set_transform`、`import_model` 可以直接调用。已注册的命令有：添加基本体/灯光、复制、删除（需要你确认）、变换、显示/隐藏、选择、着色、视图、保存/另存为/打开（需要你确认）、导入、导出 FBX/OBJ/glTF/GLB/STL/PLY/DAE。顶部菜单栏「● MCP」显示服务状态和最近 20 次调用。Every feature is a registered command; AI uses list/describe/run_command. The top bar shows "● MCP" status and recent calls.
+- **Zero config:** PolyView starts a local MCP server at `http://127.0.0.1:47800/mcp` (Streamable HTTP, localhost only) when the app launches.
+- **Scan & one-click connect:** In **Edit › Preferences › AI / MCP**, click **Scan** to list the AI clients on this computer (installed, running, connected). Tick the ones you want and click **Connect**; PolyView merges a `polyview` entry into their config files without touching other entries, and keeps a one-time `.polyview.bak` backup before the first change. Clients written automatically today: Cursor, Claude Code, Claude Desktop (via `npx mcp-remote`), VS Code, Windsurf, Trae, Gemini CLI and Codex CLI. Cherry Studio and Doubao need the config pasted in manually.
+- **Any MCP client:** One click copies the HTTP config or the stdio (`npx mcp-remote`) config, which can be pasted into any MCP-capable client (for example, using DeepSeek and other models through Cherry Studio).
+- **Command registry:** Inspired by Blender operators, every feature is registered as a command (such as `object.add_primitive` or `file.export`). AI calls any command through `list_commands` / `describe_command` / `run_command`; `get_scene`, `get_viewport_screenshot` (lets the AI see the viewport) and the shortcut tools `add_primitive`, `add_light`, `set_transform` and `import_model` can be called directly. Registered commands: add primitive / light, duplicate, delete (asks you to confirm), transform, show / hide, select, shading, view, save / save as / open (open asks you to confirm), import, and export to FBX / OBJ / glTF / GLB / STL / PLY / DAE. The **● MCP** item in the top menu bar shows the server status and the last 20 calls.
 
 ```json
 { "mcpServers": { "polyview": { "url": "http://127.0.0.1:47800/mcp" } } }
 ```
 
-设计文档 / Design: [docs/11_MCP接入设计.md](docs/11_MCP接入设计.md)
+Design: [docs/11 MCP integration design](docs/11_MCP%E6%8E%A5%E5%85%A5%E8%AE%BE%E8%AE%A1.md)
 
 
 ---
@@ -69,7 +69,7 @@ Built with C# / WPF and Direct3D 11
 
 ## 📦 Supported Formats
 
-"Supported (master)" = merged into master; "Supported (feat/import-xiaoB)" = only on 小B's branch, waiting for Ethan to merge; "In progress" = being written; "Planned" = not started. Details and measured numbers: [docs/04_渲染原理与优化.md](docs/04_渲染原理与优化.md).
+"Supported (master)" = merged into master; "Supported (feat/import-xiaoB)" = only on XiaoB's branch, waiting for Ethan to merge; "In progress" = being written; "Planned" = not started. Details and measured numbers: [docs/04 Rendering principles & optimization](docs/04_%E6%B8%B2%E6%9F%93%E5%8E%9F%E7%90%86%E4%B8%8E%E4%BC%98%E5%8C%96.md).
 
 | Format | Importer | Status | Notes |
 | --- | --- | --- | --- |
@@ -161,10 +161,10 @@ Or open `PolyView/PolyView.slnx` in Visual Studio and press **F5**.
 ├── Models/                  # Test models (flat; sources in Models/SOURCE.txt)
 └── docs/                    # All docs, numbered; index in docs/AGENTS.md
     ├── AGENTS.md            # Hand-over notes and doc index
-    ├── 01_开发计划说明.md     # Development plan (Chinese)
-    ├── 02_动作资源网站.md     # Animation resource sites (Chinese)
-    ├── 03_3D显示原理与优化.md  # 3D display principles & optimization draft (Chinese)
-    └── 04_渲染原理与优化.md    # Rendering pipeline, optimizations, measured capacity (Chinese)
+    ├── 01_*.md   # Development plan (Chinese)
+    ├── 02_*.md   # Animation resource sites (Chinese)
+    ├── 03_*.md   # 3D display principles & optimization draft (Chinese)
+    └── 04_*.md   # Rendering pipeline, optimizations, measured capacity (Chinese)
 ```
 
 ## 🧩 Sample Models
