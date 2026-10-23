@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -19,6 +19,7 @@ public partial class PreferencesWindow : Window
     public PreferencesWindow(Action onLanguageChanged)
     {
         InitializeComponent();
+        DarkTitleBar.Apply(this);
         Current = this;
         _onLanguageChanged = onLanguageChanged;
         Rebuild();

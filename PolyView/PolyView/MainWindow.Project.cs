@@ -125,7 +125,7 @@ public partial class MainWindow
         catch (Exception ex)
         {
             App.LogException("SaveProject", ex);
-            MessageBox.Show(this, UiText.ProjectSaveFailed(ex.Message), "PolyView", MessageBoxButton.OK, MessageBoxImage.Error);
+            PvMessageDialog.Show(this, UiText.ProjectSaveFailed(ex.Message), "PolyView", MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
     }
@@ -178,7 +178,7 @@ public partial class MainWindow
         }
 
         var name = _projectPath == null ? UiText.Untitled : Path.GetFileName(_projectPath);
-        var answer = MessageBox.Show(this, UiText.AskSaveChanges(name), "PolyView", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        var answer = PvMessageDialog.Show(this, UiText.AskSaveChanges(name), "PolyView", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
         return answer switch
         {
             MessageBoxResult.Yes => SaveProject(saveAs: false),
@@ -227,7 +227,7 @@ public partial class MainWindow
             {
                 var ex = task.Exception!.GetBaseException();
                 App.LogException("OpenProject", ex);
-                MessageBox.Show(this, ex is ProjectVersionException ? UiText.ProjectTooNew : UiText.ProjectOpenFailed(ex.Message),
+                PvMessageDialog.Show(this, ex is ProjectVersionException ? UiText.ProjectTooNew : UiText.ProjectOpenFailed(ex.Message),
                     "PolyView", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
@@ -255,7 +255,7 @@ public partial class MainWindow
             var problems = missing.Concat(failed).Distinct().ToList();
             if (problems.Count > 0)
             {
-                MessageBox.Show(this, UiText.ProjectMissing(string.Join("\n", problems)), "PolyView", MessageBoxButton.OK, MessageBoxImage.Warning);
+                PvMessageDialog.Show(this, UiText.ProjectMissing(string.Join("\n", problems)), "PolyView", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
 
             Activate();

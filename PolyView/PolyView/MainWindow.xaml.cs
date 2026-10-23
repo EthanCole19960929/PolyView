@@ -13,6 +13,7 @@ public partial class MainWindow : Window
     {
         AppSettings.ApplyStoredLanguage();
         InitializeComponent();
+        DarkTitleBar.Apply(this);
         // Language now lives in Edit > Preferences; the old toggle is hidden.
         MenuLanguage.Visibility = Visibility.Collapsed;
         MenuPreferences.IsEnabled = true;
@@ -147,7 +148,7 @@ public partial class MainWindow : Window
     }
 
     void MenuAbout_Click(object sender, RoutedEventArgs e) =>
-        MessageBox.Show(this, UiText.AboutText, UiText.MenuAbout, MessageBoxButton.OK, MessageBoxImage.Information);
+        PvMessageDialog.Show(this, UiText.AboutText, UiText.MenuAbout, MessageBoxButton.OK, MessageBoxImage.Information);
 
     void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {

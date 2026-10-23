@@ -28,7 +28,7 @@ namespace PolyView
         static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
             LogException("Dispatcher", e.Exception);
-            MessageBox.Show(e.Exception.Message + "\n\n" + CrashLogPath, "PolyView", MessageBoxButton.OK, MessageBoxImage.Error);
+            PvMessageDialog.Show(e.Exception.Message + "\n\n" + CrashLogPath, "PolyView", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;
         }
 
