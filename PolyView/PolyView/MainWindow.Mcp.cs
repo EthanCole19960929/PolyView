@@ -13,6 +13,7 @@ public partial class MainWindow
     void InitMcp()
     {
         PolyViewTools.Window = this;
+        InitMcpMenu();
         if (!AppSettings.Current.McpEnabled) return;
         _ = McpServerHost.StartAsync();
         Task.Run(McpClients.VerifyConnected);
@@ -116,10 +117,6 @@ public partial class MainWindow
     internal object McpDelete(int id)
     {
         if (!Viewport.TryGetObjectInfo(id, out var info)) return new { ok = false, error = $"no object {id}" };
-        var answer = PvMessageDialog.Show(this,
-            UiText.T($"AI 请求删除「{info.Name}」，是否允许？", $"AI wants to delete \"{info.Name}\". Allow?"),
-            "PolyView MCP", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (answer != MessageBoxResult.Yes) return new { ok = false, cancelled = true, error = "user declined" };
         Viewport.RemoveObject(id);
         return new { ok = true, deleted = id };
     }

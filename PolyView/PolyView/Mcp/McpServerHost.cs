@@ -11,7 +11,9 @@ public static class McpServerHost
 {
     public const int Port = 47800;
     public static string Url => $"http://127.0.0.1:{Port}/mcp";
-    public static bool Running { get; private set; }
+    public static event Action? StateChanged;
+    static bool _running;
+    public static bool Running { get => _running; private set { _running = value; StateChanged?.Invoke(); } }
     public static string? Error { get; private set; }
     static WebApplication? _app;
 

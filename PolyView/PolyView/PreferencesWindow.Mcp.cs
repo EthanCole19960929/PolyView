@@ -9,6 +9,9 @@ namespace PolyView;
 public partial class PreferencesWindow
 {
     List<McpClient> _mcpClients = [];
+
+    /// <summary>Open on a given category (e.g. "AI").</summary>
+    public void ShowCategory(string key) { _category = key; Rebuild(); }
     readonly HashSet<string> _mcpChecked = [];
 
     static readonly Brush OkBrush = new SolidColorBrush(Color.FromRgb(0x7C, 0xC4, 0x6A));

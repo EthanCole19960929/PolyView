@@ -202,3 +202,21 @@ claude mcp add --transport http polyview http://127.0.0.1:47800/mcp --header "Au
 - Cursor `~/.cursor/mcp.json`：`{"mcpServers":{"polyview":{"url":"http://127.0.0.1:47800/mcp"}}}`
 - Claude Code：`claude mcp add --transport http polyview http://127.0.0.1:47800/mcp`
 - Claude Desktop：`{"mcpServers":{"polyview":{"command":"npx","args":["-y","mcp-remote","http://127.0.0.1:47800/mcp"]}}}`（需要安装 Node.js）
+
+## 15. 命令注册表（Blender operator 风格，2026-10-23 起）
+**规则：每个新功能都必须注册一个命令。** 菜单、快捷键和 AI（MCP）都通过同一个注册表调用功能。
+
+- 代码：`Core/Commands/CommandRegistry.cs`（`[PvCommand]` 特性、反射发现命令、根据参数自动生成 JSON Schema、调度到 UI 线程执行、Destructive 命令先弹窗确认）；`Core/Commands/BuiltinCommands.cs` 存放内置命令。
+- 写法：
+```csharp
+[PvCommand("object.add_light", "object", "添加灯光", "Add a light: point | sun | spot | area", Undoable = true)]
+static object AddLight(MainWindow w, [Description("point | sun | spot | area")] string type,
+                       [Description("Position [x,y,z]")] float[]? position = null) => w.McpAddLight(type, position);
+```
+  第一个参数固定是 `MainWindow`；其余参数自动生成 schema（`int`→integer，`float`→number，`bool`→boolean，`string`→string，数组→array，字典→object），有默认值的参数是可选的。返回任意对象，会序列化成 JSON；约定带 `ok` 字段。
+- 字段：`id`（类别.名称）、`category`、中英文描述、`undoable`、`destructive`、参数 schema。
+- 已注册的命令：`scene.get`；`object.add_primitive / add_light / delete★ / duplicate / transform_set / visibility_set / select`；`view.shading / view.set`；`file.save / save_as / open★ / import / export`（★ = destructive，需要用户确认）。
+- MCP 只暴露少量通用工具：`list_commands(category?)`、`describe_command(id)`、`run_command(id, args)`、`get_scene`、`get_viewport_screenshot`，再加常用快捷工具 `add_primitive`、`add_light`、`set_transform`、`import_model`。第一阶段那些逐个功能的工具（select_object、delete_object、set_shading_mode、save_project 等）已去掉，改用 `run_command`。
+- 示例：`run_command {"id":"object.add_primitive","args":{"type":"cube","location":[3,0,0]}}`；`run_command {"id":"file.export","args":{"format":"glb","path":"mcp_test"}}` 会导出到 `C:\Project\C#\PolyView\Export\mcp_test.glb`。
+- 顶部菜单栏「帮助」右边是「● MCP」状态项：运行时绿点、关闭时灰点。点开是一个深色小面板，里面有地址、开关、「打开 AI / MCP 设置」按钮和最近 20 次调用记录。
+- 以后的计划：菜单项和快捷键也改为通过 `CommandRegistry` 调用；可撤销的命令统一接入通用撤销栈。

@@ -1,67 +1,85 @@
 using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using PolyView.Commands;
 
 namespace PolyView.Mcp;
 
-/// <summary>MCP tools. Every call is marshalled onto the WPF UI thread, where the viewport and D3D11 renderer live.</summary>
+/// <summary>
+/// MCP tools: a few generic ones over the command registry (list_commands / describe_command / run_command),
+/// scene + screenshot, and shortcuts for the most common commands. Everything runs on the WPF UI thread.
+/// </summary>
 [McpServerToolType]
 public sealed class PolyViewTools
 {
     internal static MainWindow? Window;
 
-    static readonly JsonSerializerOptions Json = new() { WriteIndented = false, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+    static readonly Queue<string> _calls = new();
+    static readonly JsonSerializerOptions Json = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    static async Task<string> Ui(Func<MainWindow, object> f)
+    internal static List<string> RecentCalls() { lock (_calls) return _calls.Reverse().ToList(); }
+
+    internal static void LogCall(string tool, string result)
     {
-        var w = Window;
-        if (w == null) return Err("PolyView window not ready");
-        try
+        bool ok = !result.Contains("\"ok\":false");
+        var mark = ok ? "✓" : "✗";
+        lock (_calls)
         {
-            var r = await Application.Current.Dispatcher.InvokeAsync(() => f(w));
-            return JsonSerializer.Serialize(r, Json);
-        }
-        catch (Exception ex)
-        {
-            return Err(ex.Message);
+            _calls.Enqueue($"{DateTime.Now:HH:mm:ss} {mark} {tool}  {(result.Length > 70 ? result[..70] : result)}");
+            while (_calls.Count > 20) _calls.Dequeue();
         }
     }
 
-    internal static string Err(string message) => JsonSerializer.Serialize(new { ok = false, error = message });
+    static async Task<string> Run(string id, JsonObject? args, string? label = null)
+    {
+        var w = Window;
+        var r = w == null ? Err("PolyView window not ready") : await CommandRegistry.RunAsync(w, id, args);
+        LogCall(label ?? id, r);
+        return r;
+    }
 
-    [McpServerTool(Name = "get_scene"), Description("List all scene objects (meshes and lights) with id, name, kind, visibility, transform (position meters, rotation euler degrees, scale), bounds, plus shading mode and selected id. Coordinates are PolyView internal world space (same as get_scene positions).")]
-    public static Task<string> GetScene() => Ui(w => w.McpGetScene());
+    static string Err(string message) => JsonSerializer.Serialize(new { ok = false, error = message });
 
-    [McpServerTool(Name = "select_object"), Description("Select an object by id (from get_scene). Use -1 to clear the selection.")]
-    public static Task<string> SelectObject([Description("Object id, or -1")] int id) => Ui(w => w.McpSelect(id));
+    static JsonObject Args(object o) => JsonSerializer.SerializeToNode(o, Json)!.AsObject();
 
-    [McpServerTool(Name = "set_transform"), Description("Set the absolute transform of an object. Omitted fields stay unchanged. Undoable with Ctrl+Z.")]
-    public static Task<string> SetTransform(
-        [Description("Object id")] int id,
-        [Description("Position [x,y,z] in meters")] float[]? position = null,
-        [Description("Rotation as euler angles [x,y,z] in degrees")] float[]? rotation_deg = null,
-        [Description("Scale [x,y,z]")] float[]? scale = null)
-        => Ui(w => w.McpSetTransform(id, position, rotation_deg, scale));
+    [McpServerTool(Name = "list_commands"), Description("List PolyView commands (Blender-operator style ids like object.add_primitive). Optional category: scene | object | view | file. Use describe_command for parameters, run_command to execute.")]
+    public static string ListCommands([Description("Optional category filter")] string? category = null)
+    {
+        var arr = new JsonArray(CommandRegistry.All.Where(c => category == null || c.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).Select(c => (JsonNode)c.Summary()).ToArray());
+        LogCall("list_commands", "ok");
+        return arr.ToJsonString(Json);
+    }
 
-    [McpServerTool(Name = "add_light"), Description("Add a light (max 16). type: point | sun | spot | area. Returns the new object id.")]
-    public static Task<string> AddLight(
-        [Description("point | sun | spot | area")] string type,
-        [Description("Optional position [x,y,z] in meters")] float[]? position = null)
-        => Ui(w => w.McpAddLight(type, position));
+    [McpServerTool(Name = "describe_command"), Description("Get a command's description and JSON Schema of its parameters.")]
+    public static string DescribeCommand([Description("Command id, e.g. file.export")] string id)
+        => CommandRegistry.Get(id)?.Describe().ToJsonString(Json) ?? Err($"unknown command '{id}'");
 
-    [McpServerTool(Name = "delete_object"), Description("Delete an object by id. PolyView asks the user to confirm first; returns cancelled if declined.")]
-    public static Task<string> DeleteObject([Description("Object id")] int id) => Ui(w => w.McpDelete(id));
+    [McpServerTool(Name = "run_command"), Description("Run a PolyView command by id with JSON arguments. Destructive commands (delete, open) ask the user to confirm in PolyView. Undoable ones can be undone with Ctrl+Z.")]
+    public static Task<string> RunCommand([Description("Command id")] string id, [Description("Arguments object matching describe_command params")] JsonObject? args = null)
+        => Run(id, args, "run " + id);
 
-    [McpServerTool(Name = "set_shading_mode"), Description("Set viewport shading: wireframe | solid | material | rendered.")]
-    public static Task<string> SetShadingMode([Description("wireframe | solid | material | rendered")] string mode) => Ui(w => w.McpSetShading(mode));
+    [McpServerTool(Name = "get_scene"), Description("List all scene objects (meshes, lights, primitives) with id, name, kind, visibility, transform (position, rotation euler degrees, scale), bounds, plus shading mode and selected id.")]
+    public static Task<string> GetScene() => Run("scene.get", null, "get_scene");
+
+    [McpServerTool(Name = "add_primitive"), Description("Shortcut for object.add_primitive. type: plane | cube | circle | uvsphere | icosphere | cylinder | cone | torus | grid | text | pointcloud | camera | curve:bezier | curve:circle | curve:nurbs | curve:nurbscircle | curve:path | empty:plain_axes | empty:arrows | empty:single_arrow | empty:circle | empty:cube | empty:sphere | empty:cone | empty:image")]
+    public static Task<string> AddPrimitive(string type,
+        [Description("Optional Blender params e.g. {\"radius\":0.5}")] Dictionary<string, float>? parameters = null,
+        [Description("Location [x,y,z]")] float[]? location = null, string? text = null, string? name = null)
+        => Run("object.add_primitive", Args(new { type, parameters, location, text, name }), "add_primitive");
+
+    [McpServerTool(Name = "add_light"), Description("Shortcut for object.add_light. type: point | sun | spot | area.")]
+    public static Task<string> AddLight([Description("point | sun | spot | area")] string type, [Description("Position [x,y,z]")] float[]? position = null)
+        => Run("object.add_light", Args(new { type, position }), "add_light");
+
+    [McpServerTool(Name = "set_transform"), Description("Shortcut for object.transform_set: absolute position (m), rotation_deg (euler degrees), scale. Omitted fields unchanged. Undoable.")]
+    public static Task<string> SetTransform(int id, float[]? position = null, float[]? rotation_deg = null, float[]? scale = null)
+        => Run("object.transform_set", Args(new { id, position, rotation_deg, scale }), "set_transform");
 
     [McpServerTool(Name = "import_model"), Description("Import a model file into the scene (adds to existing objects). Supported: .obj .stl .glb .gltf .fbx .dae .3ds .ply .json")]
-    public static Task<string> ImportModel([Description("Absolute file path on this PC")] string path) => Ui(w => w.McpImport(path));
-
-    [McpServerTool(Name = "save_project"), Description("Save the project (.pvproj). Without path: overwrite the currently open project file (fails if never saved). With path: save to that file and make it the current project.")]
-    public static Task<string> SaveProject([Description("Optional absolute .pvproj path")] string? path = null) => Ui(w => w.McpSave(path));
+    public static Task<string> ImportModel([Description("Absolute file path on this PC")] string path) => Run("file.import", Args(new { path }), "import_model");
 
     [McpServerTool(Name = "get_viewport_screenshot"), Description("Capture the current 3D viewport as a PNG image so you can see the scene.")]
     public static async Task<IEnumerable<ContentBlock>> GetViewportScreenshot()
@@ -75,6 +93,7 @@ public sealed class PolyViewTools
             catch (Exception ex) { error = ex.Message; }
         }
 
+        LogCall("get_viewport_screenshot", png == null ? "{\"ok\":false}" : "png " + png.Length + " B");
         if (png == null) return [new TextContentBlock { Text = Err(error ?? "capture failed") }];
         return [ImageContentBlock.FromBytes(png, "image/png")];
     }

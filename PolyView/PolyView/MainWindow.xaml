@@ -67,6 +67,7 @@
                         <Separator/>
                         <MenuItem x:Name="MenuAbout" Click="MenuAbout_Click"/>
                     </MenuItem>
+                    <MenuItem x:Name="MenuMcp"/>
                 </Menu>
                 <StackPanel x:Name="WorkspaceTabs" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Bottom"/>
             </StackPanel>

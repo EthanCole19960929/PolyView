@@ -37,7 +37,7 @@ Built with C# / WPF and Direct3D 11
 - **零配置 / Zero config**：PolyView 启动时自动开启本机 MCP 服务 `http://127.0.0.1:47800/mcp`（Streamable HTTP，只监听本机）。The MCP server starts with the app, localhost only.
 - **扫描 + 一键连接 / Scan & one-click connect**：在「编辑 › 偏好设置 › AI / MCP」中点「扫描」，会列出本机的 AI 客户端（是否已安装、运行中、已连接）。勾选后点「一键连接」，PolyView 会把 `polyview` 条目合并进它们的配置文件，不会动其他条目，第一次修改前会留一份 `.polyview.bak` 备份。目前能自动写入的有 Cursor、Claude Code、Claude Desktop（通过 `npx mcp-remote`）、VS Code、Windsurf、Trae、Gemini CLI、Codex CLI。Cherry Studio 和豆包需要手动粘贴配置。Scan lists installed/running/connected AI clients; connect merges a `polyview` entry safely (other entries kept, one-time `.polyview.bak`).
 - **通用配置 / Any MCP client**：一键复制 HTTP 配置或 stdio（`npx mcp-remote`）配置，可以粘贴到任何支持 MCP 的客户端（例如在 Cherry Studio 里接入 DeepSeek 等模型）。Copy-config buttons work for any MCP client.
-- **工具 / Tools**：`get_scene` · `select_object` · `set_transform` · `add_light`（point/sun/spot/area）· `delete_object`（会弹窗让你确认 / asks you first）· `set_shading_mode` · `import_model` · `save_project` · `get_viewport_screenshot`（让 AI 看到视口 / lets the AI see the viewport）。
+- **命令系统 / Command registry**：参考 Blender operator，每个功能都注册成一个命令（如 `object.add_primitive`、`file.export`）。AI 通过 `list_commands` / `describe_command` / `run_command` 调用全部命令；`get_scene`、`get_viewport_screenshot`（让 AI 看到视口）以及常用快捷工具 `add_primitive`、`add_light`、`set_transform`、`import_model` 可以直接调用。已注册的命令有：添加基本体/灯光、复制、删除（需要你确认）、变换、显示/隐藏、选择、着色、视图、保存/另存为/打开（需要你确认）、导入、导出 FBX/OBJ/glTF/GLB/STL/PLY/DAE。顶部菜单栏「● MCP」显示服务状态和最近 20 次调用。Every feature is a registered command; AI uses list/describe/run_command. The top bar shows "● MCP" status and recent calls.
 
 ```json
 { "mcpServers": { "polyview": { "url": "http://127.0.0.1:47800/mcp" } } }
