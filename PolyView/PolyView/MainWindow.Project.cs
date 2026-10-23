@@ -92,21 +92,19 @@ public partial class MainWindow
             var dialog = new SaveFileDialog
             {
                 Filter = UiText.ProjectFilter,
-                DefaultExt = ProjectPackage.Extension,
+                DefaultExt = ProjectPackage.Extension.TrimStart('.'),
+                OverwritePrompt = true,
+                CheckPathExists = true,
                 AddExtension = true,
-                InitialDirectory = path != null ? Path.GetDirectoryName(path) : _settings.DefaultProjectFolder(),
-                FileName = path != null ? Path.GetFileName(path) : UiText.Untitled + ProjectPackage.Extension,
+                InitialDirectory = path != null && Directory.Exists(Path.GetDirectoryName(path)) ? Path.GetDirectoryName(path) : _settings.DefaultProjectFolder(),
+                FileName = path != null ? Path.GetFileNameWithoutExtension(path) : UiText.Untitled,
             };
             if (dialog.ShowDialog(this) != true)
             {
                 return false;
             }
 
-            path = dialog.FileName;
-            if (!ProjectPackage.IsProjectFile(path))
-            {
-                path += ProjectPackage.Extension;
-            }
+            path = ProjectPackage.NormalizeSavePath(dialog.FileName, UiText.Untitled);
         }
 
         try
@@ -246,9 +244,10 @@ public partial class MainWindow
                 _restoring = false;
             }
 
-            _projectPath = path;
+            // Opening a .pvproj1 backup: Save goes to the matching .pvproj, not over the backup.
+            _projectPath = Path.ChangeExtension(path, ProjectPackage.Extension);
             _projectDirty = false;
-            RememberProject(path);
+            RememberProject(_projectPath);
             UpdateProjectTitle();
             UpdateProjection();
             ShowNotice(UiText.ProjectOpened(Path.GetFileName(path)));

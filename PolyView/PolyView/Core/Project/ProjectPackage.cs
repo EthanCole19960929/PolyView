@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
 
@@ -17,8 +17,22 @@ public static class ProjectPackage
         ".mtl", ".bin", ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".ktx2", ".webp", ".tif", ".tiff",
     };
 
+    /// <summary>.pvproj, or its .pvproj1 backup (same format).</summary>
     public static bool IsProjectFile(string path) =>
-        string.Equals(Path.GetExtension(path), Extension, StringComparison.OrdinalIgnoreCase);
+        string.Equals(Path.GetExtension(path), Extension, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(Path.GetExtension(path), BackupExtension, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Turns whatever the dialog returned into "&lt;folder&gt;\&lt;name&gt;.pvproj" (never a folder, never a .pvproj1).</summary>
+    public static string NormalizeSavePath(string path, string fallbackName)
+    {
+        path = Path.GetFullPath(path.Trim());
+        if (Directory.Exists(path) || path.EndsWith(Path.DirectorySeparatorChar))
+        {
+            path = Path.Combine(path, fallbackName);
+        }
+
+        return Path.ChangeExtension(path, Extension);
+    }
 
     public static string Sha256OfFile(string path)
     {
@@ -49,9 +63,15 @@ public static class ProjectPackage
     /// <summary>Writes the package to a temp file, keeps the old file as .pvproj1, then moves the temp file into place.</summary>
     public static void Write(string path, ProjectDocument doc, byte[]? thumbnailPng, ProjectSaveOptions options)
     {
-        var dir = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        path = Path.GetFullPath(path);
+        if (Directory.Exists(path))
+        {
+            throw new IOException("A folder with this name already exists: " + path);
+        }
+
+        var dir = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(dir);
-        var temp = Path.Combine(dir, Path.GetFileName(path) + ".tmp" + Environment.ProcessId);
+        var temp = Path.Combine(dir, "~" + Path.GetFileNameWithoutExtension(path) + "." + Environment.ProcessId + ".saving");
         try
         {
             using (var zip = ZipFile.Open(temp, ZipArchiveMode.Create))
@@ -79,14 +99,24 @@ public static class ProjectPackage
                 }
             }
 
+            // Make sure what we wrote reads back before it replaces anything.
+            using (var check = ZipFile.OpenRead(temp))
+            {
+                if (check.GetEntry(ManifestEntry) == null)
+                {
+                    throw new IOException("The saved package is incomplete.");
+                }
+            }
+
             if (File.Exists(path))
             {
+                // Overwriting: keep the previous version as <name>.pvproj1, then move the new file into place.
                 if (options.KeepBackup)
                 {
                     File.Copy(path, Path.ChangeExtension(path, BackupExtension), overwrite: true);
                 }
 
-                File.Replace(temp, path, null);
+                File.Move(temp, path, overwrite: true);
             }
             else
             {

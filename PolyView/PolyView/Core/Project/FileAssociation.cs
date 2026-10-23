@@ -28,6 +28,7 @@ public static class FileAssociation
             string command = $"\"{exe}\" \"%1\"";
             bool changed = false;
             changed |= Set(@"Software\Classes\" + ProjectPackage.Extension, null, ProgId);
+            changed |= Set(@"Software\Classes\" + ProjectPackage.BackupExtension, null, ProgId);
             changed |= Set(@"Software\Classes\" + ProgId, null, "PolyView Project");
             changed |= Set(@"Software\Classes\" + ProgId + @"\DefaultIcon", null, icon);
             changed |= Set(@"Software\Classes\" + ProgId + @"\shell\open\command", null, command);

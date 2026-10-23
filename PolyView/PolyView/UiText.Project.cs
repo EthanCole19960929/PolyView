@@ -1,4 +1,4 @@
-namespace PolyView;
+﻿namespace PolyView;
 
 /// <summary>Strings for project files (.pvproj). Saving a project is 保存 / 另存为, never 导出.</summary>
 public static partial class UiText
@@ -6,12 +6,12 @@ public static partial class UiText
     public static string MenuSaveAs => Chinese ? "另存为..." : "Save As...";
 
     public static string ProjectFilter => Chinese
-        ? "PolyView 工程 (*.pvproj)|*.pvproj"
-        : "PolyView project (*.pvproj)|*.pvproj";
+        ? "PolyView 工程 (*.pvproj)|*.pvproj|PolyView 工程备份 (*.pvproj1)|*.pvproj1"
+        : "PolyView project (*.pvproj)|*.pvproj|PolyView project backup (*.pvproj1)|*.pvproj1";
 
     public static string OpenAnyFilter => Chinese
-        ? "PolyView 工程和模型|*.pvproj;*.obj;*.stl;*.glb;*.gltf;*.fbx;*.dae;*.3ds;*.ply;*.json|"
-        : "PolyView projects and models|*.pvproj;*.obj;*.stl;*.glb;*.gltf;*.fbx;*.dae;*.3ds;*.ply;*.json|";
+        ? "PolyView 工程和模型|*.pvproj;*.pvproj1;*.obj;*.stl;*.glb;*.gltf;*.fbx;*.dae;*.3ds;*.ply;*.json|"
+        : "PolyView projects and models|*.pvproj;*.pvproj1;*.obj;*.stl;*.glb;*.gltf;*.fbx;*.dae;*.3ds;*.ply;*.json|";
 
     public static string Untitled => Chinese ? "未命名" : "Untitled";
 
