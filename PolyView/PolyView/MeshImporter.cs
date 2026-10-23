@@ -34,6 +34,7 @@ public static class MeshImporter
                 ".json" => ThreeJsImporter.Load(path),
                 _ => throw new InvalidDataException("只支持 OBJ、STL、GLB、glTF、FBX、DAE 和 three.js JSON。"),
             };
+            EnsureNodes(mesh);
             return ImportResult.Success(mesh);
         }
         catch (Exception ex) when (ex is InvalidDataException or FormatException or IOException or ArgumentException)
@@ -45,6 +46,23 @@ public static class MeshImporter
             // SharpGLTF 的校验/解析异常类型很多，统一当作读取失败。
             return ImportResult.Fail($"读取失败：{ex.Message}");
         }
+    }
+
+    /// <summary>没有层级信息的格式（STL、自带 OBJ 解析器等）给一个包含全部 Parts 的根网格节点。</summary>
+    internal static void EnsureNodes(MeshData mesh)
+    {
+        if (mesh.Nodes.Length > 0)
+        {
+            return;
+        }
+
+        mesh.Nodes = SceneNode.Link([new SceneNode
+        {
+            Index = 0,
+            Name = mesh.Name,
+            Kind = SceneNodeKind.Mesh,
+            PartIndices = Enumerable.Range(0, mesh.Parts.Length).ToArray(),
+        }]);
     }
 
     /// <summary>glTF/GLB 优先用 SharpGLTF；遇到不规范的文件（部分导出器会写出 SharpGLTF 拒绝的结构）再交给 Assimp。</summary>

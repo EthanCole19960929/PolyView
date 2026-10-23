@@ -45,29 +45,33 @@ public static class GltfImporter
 
         IEnumerable<Node> roots = model.DefaultScene?.VisualChildren
             ?? model.LogicalNodes.Where(n => n.VisualParent == null);
+        var sceneNodes = new List<SceneNode>();
+        var nodeSlots = new Dictionary<Node, int>();
         foreach (var node in Flatten(roots))
         {
-            if (node.Mesh == null)
+            int slot = sceneNodes.Count;
+            int parent = node.VisualParent != null && nodeSlots.TryGetValue(node.VisualParent, out var p) ? p : -1;
+            nodeSlots[node] = slot;
+            int firstPart = parts.Count;
+            if (node.Mesh != null)
             {
-                continue;
+                AddNodeMesh(node, vertices, indices, parts, textures, textureSlots);
             }
 
-            Matrix4x4[]? jointMatrices = null;
-            if (node.Skin != null && node.Skin.JointsCount > 0)
+            var camera = ReadCamera(node.Camera);
+            var light = ReadLight(node.PunctualLight);
+            sceneNodes.Add(new SceneNode
             {
-                jointMatrices = new Matrix4x4[node.Skin.JointsCount];
-                for (int i = 0; i < jointMatrices.Length; i++)
-                {
-                    var (joint, inverseBind) = node.Skin.GetJoint(i);
-                    jointMatrices[i] = inverseBind * joint.WorldMatrix;
-                }
-            }
-
-            var world = node.WorldMatrix;
-            foreach (var primitive in node.Mesh.Primitives)
-            {
-                AddPrimitive(primitive, world, jointMatrices, vertices, indices, parts, textures, textureSlots);
-            }
+                Index = slot,
+                Name = string.IsNullOrEmpty(node.Name) ? $"Node {node.LogicalIndex}" : node.Name,
+                Parent = parent,
+                Kind = node.Mesh != null ? SceneNodeKind.Mesh : camera != null ? SceneNodeKind.Camera : light != null ? SceneNodeKind.Light : SceneNodeKind.Empty,
+                Local = node.LocalMatrix,
+                World = node.WorldMatrix,
+                PartIndices = Enumerable.Range(firstPart, parts.Count - firstPart).ToArray(),
+                Camera = camera,
+                Light = light,
+            });
         }
 
         if (indices.Count < 3)
@@ -92,6 +96,85 @@ public static class GltfImporter
             Max = max,
             Parts = parts.ToArray(),
             Textures = textures.ToArray(),
+            Nodes = SceneNode.Link(sceneNodes),
+        };
+    }
+
+    static void AddNodeMesh(
+        Node node,
+        List<Vertex> vertices,
+        List<uint> indices,
+        List<MeshPart> parts,
+        List<MeshTexture> textures,
+        Dictionary<int, int> textureSlots)
+    {
+        Matrix4x4[]? jointMatrices = null;
+        if (node.Skin != null && node.Skin.JointsCount > 0)
+        {
+            jointMatrices = new Matrix4x4[node.Skin.JointsCount];
+            for (int i = 0; i < jointMatrices.Length; i++)
+            {
+                var (joint, inverseBind) = node.Skin.GetJoint(i);
+                jointMatrices[i] = inverseBind * joint.WorldMatrix;
+            }
+        }
+
+        var world = node.WorldMatrix;
+        foreach (var primitive in node.Mesh.Primitives)
+        {
+            AddPrimitive(primitive, world, jointMatrices, vertices, indices, parts, textures, textureSlots);
+        }
+    }
+
+    static SceneCamera? ReadCamera(SharpGLTF.Schema2.Camera? camera)
+    {
+        if (camera == null)
+        {
+            return null;
+        }
+
+        return camera.Settings switch
+        {
+            CameraPerspective p => new SceneCamera
+            {
+                YFov = p.VerticalFOV,
+                AspectRatio = p.AspectRatio ?? 0,
+                Near = p.ZNear,
+                Far = float.IsFinite(p.ZFar) ? p.ZFar : 0,
+            },
+            CameraOrthographic o => new SceneCamera
+            {
+                Orthographic = true,
+                OrthoHalfHeight = o.YMag,
+                AspectRatio = o.YMag != 0 ? o.XMag / o.YMag : 0,
+                Near = o.ZNear,
+                Far = o.ZFar,
+            },
+            _ => new SceneCamera(),
+        };
+    }
+
+    static SceneLight? ReadLight(PunctualLight? light)
+    {
+        if (light == null)
+        {
+            return null;
+        }
+
+        return new SceneLight
+        {
+            Type = light.LightType switch
+            {
+                PunctualLightType.Directional => SceneLightType.Directional,
+                PunctualLightType.Point => SceneLightType.Point,
+                PunctualLightType.Spot => SceneLightType.Spot,
+                _ => SceneLightType.Unknown,
+            },
+            Color = light.Color,
+            Intensity = light.Intensity,
+            Range = light.Range,
+            InnerConeAngle = light.LightType == PunctualLightType.Spot ? light.InnerConeAngle : 0,
+            OuterConeAngle = light.LightType == PunctualLightType.Spot ? light.OuterConeAngle : 0,
         };
     }
 
