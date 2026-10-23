@@ -114,8 +114,8 @@ public sealed partial class ModelViewport
         CancelTransform();
         _loadVersion++;
         ClearScene();
-        _undo.Clear();
-        _redo.Clear();
+        DropUndoEntries(_undo);
+        DropUndoEntries(_redo);
         _failure = null;
         var map = new Dictionary<int, int>();
         var failed = new List<string>();

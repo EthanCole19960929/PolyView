@@ -55,6 +55,7 @@ public partial class OutlinerPanel : UserControl
     public void Attach(ModelViewport viewport)
     {
         _viewport = viewport;
+        viewport.CollectionRootProvider = () => Root;
         viewport.SceneChanged += (_, _) => Rebuild();
         viewport.SelectionChanged += (_, _) => SyncFromViewport();
         viewport.SelectedIdsChanged += (_, _) => SyncSelectionSetFromViewport();

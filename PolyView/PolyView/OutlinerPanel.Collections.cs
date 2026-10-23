@@ -186,9 +186,33 @@ public partial class OutlinerPanel
             return false;
         }
 
+        var parent = c.Parent!;
+        int index = parent.Children.IndexOf(c);
+        var children = c.Children.ToList();
+        var objects = c.Objects.ToList();
+        var parentObjsBefore = parent.Objects.ToList();
         c.DeleteKeepChildren();
         Rebuild();
         OnCollectionsChanged();
+        _viewport?.PushCustomUndo(
+            undo: () =>
+            {
+                foreach (var ch in children) c.AddChild(ch);
+                parent.Objects.Clear();
+                parent.Objects.AddRange(parentObjsBefore);
+                c.Objects.Clear();
+                c.Objects.AddRange(objects);
+                parent.AddChild(c, index);
+                Rebuild();
+                OnCollectionsChanged();
+            },
+            redo: () =>
+            {
+                if (c.Parent == null) return;
+                c.DeleteKeepChildren();
+                Rebuild();
+                OnCollectionsChanged();
+            });
         return true;
     }
 

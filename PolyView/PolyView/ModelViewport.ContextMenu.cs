@@ -447,12 +447,7 @@ public sealed partial class ModelViewport
             return 0;
         }
 
-        foreach (var o in sel)
-        {
-            RemoveObject(o.Id);
-        }
-
-        return sel.Count;
+        return DeleteObjects(sel.Select(o => o.Id));
     }
 }
 

@@ -118,7 +118,7 @@ public partial class MainWindow
     internal object McpDelete(int id)
     {
         if (!Viewport.TryGetObjectInfo(id, out var info)) return new { ok = false, error = $"no object {id}" };
-        Viewport.RemoveObject(id);
+        Viewport.DeleteObjects([id]);
         return new { ok = true, deleted = id };
     }
 

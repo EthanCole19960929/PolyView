@@ -166,7 +166,7 @@ public sealed partial class ModelViewport
         sh.Items.Add(Item(UiText.HdrHideSelected, sel ? () => SetObjectVisible(_selectedId, false) : null, "H"));
         items.Add(sh);
         items.Add(new Separator());
-        items.Add(Item(UiText.HdrDelete, sel ? () => RemoveObject(_selectedId) : null, "X"));
+        items.Add(Item(UiText.HdrDelete, sel ? () => DeleteSelectedConfirm(ask: false) : null, "X"));
     }
 
     /// <summary>Run a viewport shortcut from a menu (same code path as the keyboard).</summary>
