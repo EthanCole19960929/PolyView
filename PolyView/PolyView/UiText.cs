@@ -70,4 +70,6 @@ public static class UiText
     public static string LightSun => Chinese ? "日光" : "Sun";
     public static string LightSpot => Chinese ? "聚光" : "Spot";
     public static string LightArea => Chinese ? "面光" : "Area";
-    public static string LightAmbient => Chinese ? "环境光" : "Ambient";}
+    public static string LightAmbient => Chinese ? "环境光" : "Ambient";
+    public static string KindWorld => Chinese ? "世界" : "World";
+}
