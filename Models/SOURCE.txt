@@ -1,0 +1,8 @@
+Knight.glb
+来源：https://3452a190.20261023-game-models.pages.dev/
+原路径：models/lowpoly/character/kaykit-adventurers/Knight.glb
+套件：KayKit Adventurers（KayKit）
+授权：CC0-1.0
+下载日期：2026-10-23
+内容：低多边形人形骑士，已绑骨。动画含 Idle、Walking、Running、Jump、Death、Hit、Interact 等。
+大小：962312 字节
