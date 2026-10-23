@@ -259,6 +259,11 @@ public sealed class SceneRenderer : IDisposable
     /// <summary>当前高亮的对象 id，-1 表示无。</summary>
     public int SelectedId { get; set; } = -1;
 
+    /// <summary>Other selected objects (box select / Shift+click). Highlighted and outlined like the active one.</summary>
+    public IReadOnlyCollection<int>? ExtraSelectedIds { get; set; }
+
+    bool IsSelected(int id) => id == SelectedId || (ExtraSelectedIds != null && ExtraSelectedIds.Contains(id));
+
     public int ObjectCount => _objects.Count;
 
     SceneRenderer(ID3D11Device device, ID3D11DeviceContext context, string deviceName)
@@ -492,16 +497,13 @@ public sealed class SceneRenderer : IDisposable
 
     void DrawOutline()
     {
-        GpuObject? gpu = null;
+        bool any = false;
         for (int i = 0; i < _objects.Count; i++)
         {
-            if (_objects[i].Id == SelectedId && _objects[i].Visible)
-            {
-                gpu = _objects[i];
-            }
+            any |= _objects[i].Visible && _objects[i].IndexCount > 0 && IsSelected(_objects[i].Id);
         }
 
-        if (gpu == null || _maskView == null || _maskResource == null || _colorView == null)
+        if (!any || _maskView == null || _maskResource == null || _colorView == null)
         {
             return;
         }
@@ -512,22 +514,33 @@ public sealed class SceneRenderer : IDisposable
         _context.OMSetDepthStencilState(_noDepthState, 0);
         _context.RSSetState(_doubleSidedRasterizer);
         _context.PSSetShader(_maskShader);
-        WriteConstants(gpu.World * Matrix4x4.CreateScale(_lastScale), _lastViewProjection, _lastLight, unlit: false, highlight: OutlineWhite ? 1f : 0f);
-        _vertexSlot[0] = gpu.Vertices;
-        _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
-        _context.IASetIndexBuffer(gpu.Indices, Format.R32_UInt, 0);
-        var parts = gpu.Parts;
-        for (int p = 0; p < parts.Length; p++)
+        // Every selected object goes into one mask (the active one plus box select / Shift+click extras).
+        for (int i = 0; i < _objects.Count; i++)
         {
-            var part = parts[p];
-            if (part.IndexCount <= 0 || part.StartIndex + part.IndexCount > gpu.IndexCount
-                || (gpu.PartHidden != null && p < gpu.PartHidden.Length && gpu.PartHidden[p])
-                || (gpu.PartHighlight != null && (p >= gpu.PartHighlight.Length || !gpu.PartHighlight[p])))
+            var gpu = _objects[i];
+            if (!gpu.Visible || gpu.IndexCount <= 0 || !IsSelected(gpu.Id))
             {
                 continue;
             }
 
-            _context.DrawIndexed((uint)part.IndexCount, (uint)part.StartIndex, 0);
+            bool active = gpu.Id == SelectedId;
+            WriteConstants(gpu.World * Matrix4x4.CreateScale(_lastScale), _lastViewProjection, _lastLight, unlit: false, highlight: active && OutlineWhite ? 1f : 0f);
+            _vertexSlot[0] = gpu.Vertices;
+            _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
+            _context.IASetIndexBuffer(gpu.Indices, Format.R32_UInt, 0);
+            var parts = gpu.Parts;
+            for (int p = 0; p < parts.Length; p++)
+            {
+                var part = parts[p];
+                if (part.IndexCount <= 0 || part.StartIndex + part.IndexCount > gpu.IndexCount
+                    || (gpu.PartHidden != null && p < gpu.PartHidden.Length && gpu.PartHidden[p])
+                    || (active && gpu.PartHighlight != null && (p >= gpu.PartHighlight.Length || !gpu.PartHighlight[p])))
+                {
+                    continue;
+                }
+
+                _context.DrawIndexed((uint)part.IndexCount, (uint)part.StartIndex, 0);
+            }
         }
 
         // 全屏边缘检测，叠加到颜色缓冲
@@ -812,7 +825,7 @@ public sealed class SceneRenderer : IDisposable
                 continue;
             }
 
-            bool selected = gpu.Id == SelectedId;
+            bool selected = IsSelected(gpu.Id);
             var objectWorld = gpu.World * sceneWorld;
             float written = -1f;
             _vertexSlot[0] = gpu.Vertices;
