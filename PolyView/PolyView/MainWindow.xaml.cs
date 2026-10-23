@@ -94,10 +94,11 @@ public partial class MainWindow : Window
 
     void OpenButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = UiText.FileFilter };
+        var dialog = new OpenFileDialog { Filter = UiText.FileFilter, Multiselect = true };
         if (dialog.ShowDialog(this) == true)
         {
-            Viewport.LoadPath(dialog.FileName);
+            // 多选：第一个替换场景，其余追加为新对象（各自有 id，可点选）。
+            Viewport.LoadPaths(dialog.FileNames);
         }
     }
 
