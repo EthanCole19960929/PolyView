@@ -1,6 +1,6 @@
 ﻿namespace PolyView;
 
-public static class UiText
+public static partial class UiText
 {
     public static bool Chinese { get; set; } = true;
 

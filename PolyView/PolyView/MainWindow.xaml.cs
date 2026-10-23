@@ -11,7 +11,12 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        AppSettings.ApplyStoredLanguage();
         InitializeComponent();
+        // Language now lives in Edit > Preferences; the old toggle is hidden.
+        MenuLanguage.Visibility = Visibility.Collapsed;
+        MenuPreferences.IsEnabled = true;
+        MenuPreferences.Click += (_, _) => new PreferencesWindow(ApplyLanguage) { Owner = this }.ShowDialog();
         Viewport.ViewChanged += (_, _) => UpdateStatus();
         Outliner.Attach(Viewport);
         ApplyLanguage();
