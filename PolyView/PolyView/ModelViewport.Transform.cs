@@ -16,10 +16,14 @@ public sealed partial class ModelViewport
     readonly ToggleButton[] _toolButtons = new ToggleButton[4];
     readonly TextBlock _modalText = new()
     {
-        Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD2, 0x4A)),
-        Margin = new Thickness(56, 0, 0, 8),
-        VerticalAlignment = VerticalAlignment.Bottom,
-        HorizontalAlignment = HorizontalAlignment.Left,
+        Foreground = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
+        Background = new SolidColorBrush(Color.FromArgb(0xB0, 0x20, 0x20, 0x20)),
+        Padding = new Thickness(8, 3, 8, 3),
+        FontSize = 13,
+        Margin = new Thickness(0, 6, 0, 0),
+        VerticalAlignment = VerticalAlignment.Top,
+        HorizontalAlignment = HorizontalAlignment.Center,
+        Visibility = Visibility.Collapsed,
         IsHitTestVisible = false,
     };
 
@@ -98,6 +102,7 @@ public sealed partial class ModelViewport
             bar.Children.Add(button);
         }
         grid.Children.Add(group);
+        grid.Children.Add(_modalCanvas);
         grid.Children.Add(_modalText);
         grid.Children.Add(BuildNavGizmo());
         grid.Children.Add(BuildShadingBar());
@@ -913,7 +918,7 @@ public sealed partial class ModelViewport
                 }
 
                 t.Position = center + delta;
-                status = $"D: {delta.X:0.###}, {delta.Y:0.###}, {delta.Z:0.###}{axisName}";
+                status = $"D: {delta.X:0.####} m  {delta.Y:0.####} m  {delta.Z:0.####} m ({delta.Length():0.####} m){axisName}";
                 break;
             }
 
@@ -954,7 +959,7 @@ public sealed partial class ModelViewport
                 t.Rotation = Quaternion.Normalize(Quaternion.Concatenate(
                     _xformStart.Rotation,
                     Quaternion.CreateFromAxisAngle(axis, degrees * MathF.PI / 180f)));
-                status = (UiText.Chinese ? "角度 " : "Angle ") + $"{degrees:0.#}°{axisName}";
+                status = $"Rotation: {degrees:0.##}°{axisName}";
                 break;
             }
 
@@ -990,7 +995,7 @@ public sealed partial class ModelViewport
                 }
 
                 t.Scale = _xformStart.Scale * factor;
-                status = (UiText.Chinese ? "缩放 " : "Scale ") + $"{s:0.00}{axisName}";
+                status = $"Scale X: {factor.X:0.0000}  Y: {factor.Y:0.0000}  Z: {factor.Z:0.0000}{axisName}";
                 break;
             }
         }
@@ -1001,6 +1006,7 @@ public sealed partial class ModelViewport
         }
 
         _modalText.Text = status;
+        UpdateModalOverlay(mouse, center);
         ApplyTransform(o, t, commit: false);
     }
 
@@ -1013,6 +1019,7 @@ public sealed partial class ModelViewport
 
         _xformActive = false;
         _modalText.Text = "";
+        HideModalOverlay();
         ReleaseMouseCapture();
         if (TryGetObject(_selectedId, out var o))
         {
@@ -1037,6 +1044,7 @@ public sealed partial class ModelViewport
 
         _xformActive = false;
         _modalText.Text = "";
+        HideModalOverlay();
         ReleaseMouseCapture();
         if (TryGetObject(_selectedId, out var o))
         {

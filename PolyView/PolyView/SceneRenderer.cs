@@ -86,7 +86,7 @@ public sealed class SceneRenderer : IDisposable
                 {
                     if (SelectionMask.Load(int3(p + int2(x, y), 0)) > 0.5)
                     {
-                        return float4(1.0, 0.627, 0.157, 1);
+                        return Highlight > 0.5 ? float4(1, 1, 1, 1) : float4(1.0, 0.627, 0.157, 1);
                     }
                 }
             }
@@ -487,6 +487,9 @@ public sealed class SceneRenderer : IDisposable
     }
 
     /// <summary>选中对象的轮廓：画进掩码（不测深度，被挡住也描边，与 Blender 一致），再全屏边缘检测叠加到画面。</summary>
+    /// <summary>Blender draws the active outline white while G / R / S runs.</summary>
+    public bool OutlineWhite { get; set; }
+
     void DrawOutline()
     {
         GpuObject? gpu = null;
@@ -509,7 +512,7 @@ public sealed class SceneRenderer : IDisposable
         _context.OMSetDepthStencilState(_noDepthState, 0);
         _context.RSSetState(_doubleSidedRasterizer);
         _context.PSSetShader(_maskShader);
-        WriteConstants(gpu.World * Matrix4x4.CreateScale(_lastScale), _lastViewProjection, _lastLight, unlit: false, highlight: 0f);
+        WriteConstants(gpu.World * Matrix4x4.CreateScale(_lastScale), _lastViewProjection, _lastLight, unlit: false, highlight: OutlineWhite ? 1f : 0f);
         _vertexSlot[0] = gpu.Vertices;
         _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
         _context.IASetIndexBuffer(gpu.Indices, Format.R32_UInt, 0);
