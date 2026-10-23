@@ -72,4 +72,8 @@ public static class UiText
     public static string LightArea => Chinese ? "面光" : "Area";
     public static string LightAmbient => Chinese ? "环境光" : "Ambient";
     public static string KindWorld => Chinese ? "世界" : "World";
-}
+    public static string OutlinerSearch => Chinese ? "搜索" : "Search";
+    public static string TransformTitle => Chinese ? "变换" : "Transform";
+    public static string TransformLocation => Chinese ? "位置" : "Location";
+    public static string TransformRotation => Chinese ? "旋转" : "Rotation";
+    public static string TransformScale => Chinese ? "缩放" : "Scale";}
