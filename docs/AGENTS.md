@@ -15,11 +15,13 @@ PolyView 是一个用 C# 写的轻量 Windows 3D 模型查看器：WPF 做界面
 | 03 | [03_3D显示原理与优化.md](03_3D显示原理与优化.md) | 小U | 2026-10-23 | 3D 显示原理与优化草稿（容量数字为估算） |
 | 04 | [04_渲染原理与优化.md](04_渲染原理与优化.md) | 小B、小U | 2026-10-23 | 按实际代码写的渲染流程、相机和光照、已做 / 待做优化、实测容量、格式和 Draco 说明；第 2 阶段多对象 / 拾取 / 高亮及实测、给场景树的接口 |
 | 05 | [05_变换操纵轴规格.md](05_变换操纵轴规格.md) | novel | 2026-10-23 | Blender 式选择/移动/旋转/缩放工具与手柄、快捷键、对象 TRS 数据模型、拾取接口、场景大纲、验收清单 |
-| 06 | [06_开发进度.md](06_开发进度.md) | novel | 2026-10-23 | 各成员分工、分支、已完成 / 进行中 / 待办和已知问题 |
+| 06 | [06_开发进度.md](06_开发进度.md) | program | 2026-10-23 | 已完成 / 进行中 / 计划、分工和创新点（按 master git log） |
 | 07 | [07_灯光规格.md](07_灯光规格.md) | novel | 2026-10-23 | 对齐 Blender 的灯光类型（Point/Sun/Spot/Area）与 World 环境光、glTF/Assimp 导入映射、视口图标、着色模式、数据模型、分工与验收 |
 | 08 | [08_开源项目借鉴.md](08_开源项目借鉴.md) | novel | 2026-10-23 | 借鉴 Helix Toolkit / Stride / ImGuizmo / Flax 源码：选中描边、无限网格遮挡、手柄几何与拖拽数学、撤销/重做、大纲树、灯光图标、BVH 拾取、吸附，按 P0/P1/P2 对到 PolyView 类和负责人 |
 | 09 | [09_工程文件格式.md](09_工程文件格式.md) | program | 2026-10-23 | .pvproj 工程文件（zip + project.json）设计：保存/复原内容、保存打开流程、版本兼容、实现计划 |
 | 10 | [10_渲染实现与性能.md](10_渲染实现与性能.md) | program | 2026-10-23 | 每帧渲染流程、着色模式与光照公式、和 Blender Workbench/Eevee/Cycles 对比、CPU/GPU 内存推算、风险和后续优化 |
+| 11 | [11_MCP接入设计.md](11_MCP接入设计.md) | program | 2026-10-23 | AI 通过 MCP 操控 PolyView：架构对比与推荐、线程/撤销/安全、工具与资源、客户端配置、分阶段计划、AI 可调用原则 |
+| 12 | [12_Blender联动设计.md](12_Blender联动设计.md) | program | 2026-10-23 | PolyView 与 Blender 联动：一键发送、导入 .blend、双向实时同步（Live Link）、复用 MCP |
 | — | [AGENTS.md](AGENTS.md) | 小B | 2026-10-23 | 本文：接手说明和文档索引 |
 
 **规则：** 新的 Markdown 文档一律放进 `docs\`，文件名用下一个两位编号 `NN_标题.md`，并且必须加进上面这张表。只有 `AGENTS.md` 不编号。
@@ -40,7 +42,7 @@ PolyView 是一个用 C# 写的轻量 Windows 3D 模型查看器：WPF 做界面
 ## 编译和运行
 
 ```powershell
-cd F:\project\c#\2026\1023_PolyView
+cd C:\Project\C#\PolyView
 dotnet build PolyView\PolyView\PolyView.csproj
 dotnet run --project PolyView\PolyView\PolyView.csproj
 # 直接打开某个模型（也用于「打开方式」）：
@@ -115,48 +117,40 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 
 命令行性能测试：`PolyView.exe --bench <模型> <输出.tsv>`，加载、测 FPS 和 GPU 每帧耗时，追加一行 TSV 后退出。说明和实测结果见 [04_渲染原理与优化.md](04_渲染原理与优化.md)。
 
-## 文件归属
+## 项目特色
 
-| 谁 | 负责 |
-| --- | --- |
-| program | 唯一写代码的 bot：全部源码（导入、渲染、拾取、手柄、场景列表、灯光、`MainWindow`、`UiText.cs`、`.csproj` 等），统一调度、提交并推送 master |
-| novel | `docs/` 文档内容，只在 program 点名时写，改动交 program 或按 program 安排提交 |
-| english | 界面英文文案校对，意见交给 program，不直接改代码 |
-| PolyView软件开发 | 导入 / 项目相关的建议，只在 program 点名时协助，不直接改代码 |
-| test all | 代码审查意见，只读不提交 |
-| Ethan | 用户本人，提需求、测试效果 |
+- **内置零配置 MCP**：AI 不用额外配置就能操控 PolyView，自动扫描本机 AI 客户端一键接入（见 11）。
+- **Blender 联动**：一键发送、导入 .blend、双向实时同步（见 12）。
+- **复刻 Blender 4.2**：界面、操作、观感尽量一致。
 
-## 协作方式
+## 开发原则
 
-- 用户只向 program 提需求，由 program 统一调度。
-- 只有 program 写代码并提交 master。
-- 其他 bot（PolyView软件开发、english、novel、test all）仅在 program 点名时协助（文档、文案校对、审查意见），不直接改代码。
+- **每个功能都要有 AI 可调用接口**：新功能同时在命令层 / MCP 暴露，不能只能点界面。
+- **性能优先**：按需渲染，渲染循环不分配内存，资源及时释放。
+
+## 协作方式（多 bot）
+
+- 用户的需求交给 program，program 拆分并分派给各 bot；其他 bot 也可以写代码，但各自只负责分到的文件和功能块。
 - 每次开工先读 `docs/AGENTS.md` 和 `docs/06_开发进度.md`。
 
 ## Git 规则
 
-- 本项目只在 master 一个分支开发，不建功能分支 / 额外 worktree，所有人都在主目录 `1023_PolyView` 的 master 上直接改。
-- 改动前先 `git pull --rebase`，编译通过即提交并推送 master；不强推（不用 `--force`）。效果由用户自己测试，代理不再打开程序逐项验收。
-- 编译必须通过才推。
-- 提交信息用 `[名字]` 开头，例如 `[小B] GLB/FBX/DAE 导入`。
-- 不提交编译产物：`.gitignore` 已忽略 `bin/`、`obj/`、`.vs/`、`*.user`、`/_旧版备份/`。注意 `[Oo]bj/` 也会忽略名叫 `obj` 的模型目录，所以 `Models/` 保持平铺。
-- 本机推送 GitHub 若报 TLS 错误，用 `git -c http.sslBackend=schannel push ...`。
+1. 只在 master 开发，不建分支 / worktree。
+2. 提交信息用英文，以自己的前缀开头：`[program]`、`[novel]`、`[english]`、`[PolyView软件开发]` 等。
+3. 推送前先 `git pull`；被别人未提交的改动挡住时用 `git fetch` + 快进。
+4. 禁止 `git stash`、`git reset`、`--force`。
+5. 只 `git add <自己的文件>`，禁止 `git add .` / `-A`；提交前先看暂存区。
+6. 编译通过才推；不提交 bin/ obj/ .vs/。
 
-### 防干扰规则
+## 改完代码后的流程
 
-1. 代码只由 program 修改；其他 bot 有建议发给 program，不直接动源码。
-2. 只用 `git add <具体文件>`，禁止 `git add .` / `git add -A`。
-3. 改动前先 `git pull --rebase`，编译通过后立即提交推送，小步提交，不留半成品。
-4. 编译不过不推，禁止 `--force`。
-5. novel 改 `docs/` 时也要经 program 安排，避免与代码提交撞车。
+1. 关闭正在运行的 PolyView。
+2. 编译 Debug：`dotnet build PolyView\PolyView\PolyView.csproj`，输出 `PolyView\PolyView\bin\Debug\net10.0-windows\PolyView.exe`。
+3. 重新启动新版本（桌面快捷方式 `PolyView.lnk`），确认已运行。崩溃日志在 `%LOCALAPPDATA%\PolyView\crash.log`。
 
-## 当前进度（2026-10-23）
+## 当前进度
 
-- 已在 master：OBJ / STL / GLB / glTF 导入，拖放打开，命令行打开，修复视口全黑（矩阵转置），中英文切换。
-- `feat/import-xiaoB` 分支（已推送，等 Ethan 合并）：Models 平铺（bf3fd7b）、文档整理（c6a515c）、合并 master（e7a1015）；代码提交：Assimp 导入 FBX / DAE、three.js JSON、GLB 的 Draco 解码和 WebP 贴图、Blender 式导航、地面网格、按需渲染、去掉「X 拉伸」和「缩放」滑块、去掉界面上的 FPS 显示、相机跟随光照、`--bench` 性能测试、docs/04。
-- `feat/picking-program` 分支（小U / program，基于 feat/import-xiaoB）：多对象场景（整数 id、多文件打开）、射线拾取（包围盒粗筛 + 三角形精测）、点空白取消选择、选中高亮、线框 Shift+Z、复位视角，接口见 docs/04。
-- 下一步：小C 按下面的验收标准逐项验收；内存反复开关测试；场景树 / 属性栏接上述接口（PolyView软件开发）。
-
+见 [06_开发进度.md](06_开发进度.md)。
 ## 验收标准与已知坑
 
 ### 渲染
