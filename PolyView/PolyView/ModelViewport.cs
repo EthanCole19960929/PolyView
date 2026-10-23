@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -542,6 +542,7 @@ public sealed partial class ModelViewport : UserControl
         }
         catch (Exception ex)
         {
+            App.LogException("OnLoaded", ex);
             _failure = ex.Message;
             ViewChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -566,6 +567,22 @@ public sealed partial class ModelViewport : UserControl
     }
 
     void OnRendering(object? sender, EventArgs e)
+    {
+        try
+        {
+            RenderTick();
+        }
+        catch (Exception ex)
+        {
+            // Never let a render exception kill the app: log it and show it in the status bar.
+            App.LogException("Render", ex);
+            _failure = ex.Message;
+            _dirty = false;
+            ViewChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    void RenderTick()
     {
         if (_bench != null && _bench.Running)
         {
