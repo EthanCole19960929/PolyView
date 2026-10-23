@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -40,6 +40,7 @@ public sealed partial class ModelViewport
     Point _xformMouse0;
     Vector3 _xformHit0;
     float _xformAngle0;
+    string _xformTyped = "";   // Blender-style numeric input during G/R/S (e.g. G X 2)
 
     int _selectedNode = -1;
 
@@ -106,16 +107,65 @@ public sealed partial class ModelViewport
     /// <summary>切换语言时刷新工具栏提示。</summary>
     public void ApplyToolbarLanguage()
     {
-        string[] names = [UiText.ToolSelect, UiText.ToolMove, UiText.ToolRotate, UiText.ToolScale];
-        string[] hints = ["W", UiText.HintMove, UiText.HintRotate, UiText.HintScale];
+        string[] names = [UiText.TipSelectName, UiText.TipMoveName, UiText.TipRotateName, UiText.TipScaleName];
+        string[] details = [UiText.TipSelect, UiText.TipMove, UiText.TipRotate, UiText.TipScale];
+        string[] keys = ["W", "G", "R", "S"];
         for (int i = 0; i < _toolButtons.Length; i++)
         {
             if (_toolButtons[i] != null)
             {
-                _toolButtons[i].ToolTip = names[i] + "\n" + hints[i];
+                _toolButtons[i].ToolTip = CreateToolTip(names[i], details[i], $"{UiText.Shortcut}: {keys[i]}");
+                ToolTipService.SetInitialShowDelay(_toolButtons[i], 500);
+                ToolTipService.SetShowDuration(_toolButtons[i], 60000);
             }
         }
     }
+
+    static readonly Brush TipBackground = new SolidColorBrush(Color.FromRgb(0x18, 0x18, 0x18));
+    static readonly Brush TipBorder = new SolidColorBrush(Color.FromRgb(0x3D, 0x3D, 0x3D));
+    static readonly Brush TipText = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+    static readonly Brush TipDim = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A));
+
+    /// <summary>Blender-style two-stage tooltip: the name first, then after ~1 s more the description and shortcut.</summary>
+    public static ToolTip CreateToolTip(string name, string detail, string shortcut)
+    {
+        var details = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 4, 0, 0) };
+        details.Children.Add(new TextBlock { Text = detail, Foreground = TipText });
+        details.Children.Add(new TextBlock { Text = shortcut, Foreground = TipDim, Margin = new Thickness(0, 4, 0, 0) });
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = name, Foreground = TipText, FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(details);
+        var tip = new ToolTip
+        {
+            Content = panel,
+            Background = TipBackground,
+            BorderBrush = TipBorder,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8, 5, 8, 6),
+            FontSize = 12,
+            HasDropShadow = true,
+        };
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            details.Visibility = Visibility.Visible;
+        };
+        tip.Opened += (_, _) =>
+        {
+            details.Visibility = Visibility.Collapsed;
+            timer.Start();
+        };
+        tip.Closed += (_, _) =>
+        {
+            timer.Stop();
+            details.Visibility = Visibility.Collapsed;
+        };
+        return tip;
+    }
+
+    /// <summary>True while a G/R/S (modal or handle drag) transform is running.</summary>
+    public bool IsTransforming => _xformActive;
 
     // ---------------- 变换数据 ----------------
 
@@ -228,6 +278,7 @@ public sealed partial class ModelViewport
             Textures = mesh.Textures,
             Notice = mesh.Notice,
             Nodes = mesh.Nodes,
+            World = mesh.World,
         };
     }
 
@@ -491,7 +542,8 @@ public sealed partial class ModelViewport
                 case Key.X:
                 case Key.Y:
                 case Key.Z:
-                    int axis = key - Key.X;
+                    // Blender keys: X = X, Y = depth (app Z), Z = up (app Y).
+                    int axis = key == Key.X ? 0 : key == Key.Y ? 2 : 1;
                     _xformPart = axis;
                     _xformPlane = shift;
                     _xformHandle = -1;
@@ -504,6 +556,12 @@ public sealed partial class ModelViewport
                     CancelTransform();
                     return true;
                 default:
+                    if (TypeNumber(key))
+                    {
+                        UpdateTransform(Mouse.GetPosition(this));
+                        return true;
+                    }
+
                     return key is Key.G or Key.R or Key.S;
             }
         }
@@ -573,6 +631,10 @@ public sealed partial class ModelViewport
 
                 var tool = key == Key.G ? TransformTool.Move : key == Key.R ? TransformTool.Rotate : TransformTool.Scale;
                 var mouse = Mouse.GetPosition(this);
+                // Take keyboard focus so the following X/Y/Z, digits and Enter reach the viewport even if
+                // the outliner or a toolbar button had focus when G/R/S was pressed.
+                Focus();
+                Keyboard.Focus(this);
                 BeginTransform(tool, Gizmo.Center, plane: false, modal: true, mouse);
                 CaptureMouse();
                 return true;
@@ -581,8 +643,51 @@ public sealed partial class ModelViewport
         }
     }
 
+    /// <summary>Numeric input while transforming: digits, '.', '-' (toggle sign), Backspace.</summary>
+    bool TypeNumber(Key key)
+    {
+        char c = key switch
+        {
+            >= Key.D0 and <= Key.D9 => (char)('0' + (key - Key.D0)),
+            >= Key.NumPad0 and <= Key.NumPad9 => (char)('0' + (key - Key.NumPad0)),
+            Key.OemPeriod or Key.Decimal => '.',
+            Key.OemMinus or Key.Subtract => '-',
+            Key.Back => '\b',
+            _ => '\0',
+        };
+        switch (c)
+        {
+            case '\0':
+                return false;
+            case '\b':
+                if (_xformTyped.Length > 0)
+                {
+                    _xformTyped = _xformTyped[..^1];
+                }
+
+                return true;
+            case '-':
+                _xformTyped = _xformTyped.StartsWith('-') ? _xformTyped[1..] : "-" + _xformTyped;
+                return true;
+            case '.':
+                if (!_xformTyped.Contains('.'))
+                {
+                    _xformTyped += ".";
+                }
+
+                return true;
+            default:
+                _xformTyped += c;
+                return true;
+        }
+    }
+
+    bool TryTypedValue(out float value) =>
+        float.TryParse(_xformTyped, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value);
+
     void BeginTransform(TransformTool tool, int part, bool plane, bool modal, Point mouse)
     {
+        _xformTyped = "";
         if (!TryGetObject(_selectedId, out var o))
         {
             return;
@@ -671,7 +776,7 @@ public sealed partial class ModelViewport
         var t = _xformStart;
         var center = _xformStart.Position;
         string status;
-        string axisName = _xformPart == Gizmo.Center ? "" : (_xformPlane ? " (Shift+" : " (") + (char)('X' + _xformPart) + ")";
+        string axisName = _xformPart == Gizmo.Center ? "" : (_xformPlane ? " (Shift+" : " (") + Gizmo.BlenderLetter(_xformPart) + ")";
         switch (_xformTool)
         {
             case TransformTool.Move:
@@ -695,6 +800,15 @@ public sealed partial class ModelViewport
                 if (snap)
                 {
                     delta = new Vector3(MathF.Round(delta.X), MathF.Round(delta.Y), MathF.Round(delta.Z));
+                }
+
+                if (TryTypedValue(out float typedMove))
+                {
+                    // Typed value: along the locked axis; free move uses X (as Blender); plane lock moves both remaining axes.
+                    int axisIndex = _xformPart == Gizmo.Center ? 0 : _xformPart;
+                    delta = _xformPlane
+                        ? (Vector3.One - Gizmo.Axes[axisIndex]) * typedMove
+                        : Gizmo.Axes[axisIndex] * typedMove;
                 }
 
                 t.Position = center + delta;
@@ -727,6 +841,15 @@ public sealed partial class ModelViewport
                     degrees = MathF.Round(degrees / 5f) * 5f;
                 }
 
+                if (TryTypedValue(out float typedAngle))
+                {
+                    degrees = typedAngle;
+                    if (_xformPart != Gizmo.Center && !_xformPlane)
+                    {
+                        axis = Gizmo.Axes[_xformPart];
+                    }
+                }
+
                 t.Rotation = Quaternion.Normalize(Quaternion.Concatenate(
                     _xformStart.Rotation,
                     Quaternion.CreateFromAxisAngle(axis, degrees * MathF.PI / 180f)));
@@ -744,6 +867,11 @@ public sealed partial class ModelViewport
                 if (snap)
                 {
                     s = MathF.Max(0.1f, MathF.Round(s * 10f) / 10f);
+                }
+
+                if (TryTypedValue(out float typedScale))
+                {
+                    s = typedScale;
                 }
 
                 var factor = Vector3.One;
@@ -764,6 +892,11 @@ public sealed partial class ModelViewport
                 status = (UiText.Chinese ? "缩放 " : "Scale ") + $"{s:0.00}{axisName}";
                 break;
             }
+        }
+
+        if (_xformTyped.Length > 0)
+        {
+            status += "  [" + _xformTyped + "]";
         }
 
         _modalText.Text = status;

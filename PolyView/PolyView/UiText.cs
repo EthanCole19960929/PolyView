@@ -77,4 +77,13 @@ public static class UiText
     public static string TransformLocation => Chinese ? "位置" : "Location";
     public static string TransformRotation => Chinese ? "旋转" : "Rotation";
     public static string TransformScale => Chinese ? "缩放" : "Scale";
+    public static string TipSelectName => Chinese ? "选择" : "Select";
+    public static string TipMoveName => Chinese ? "移动" : "Move";
+    public static string TipRotateName => Chinese ? "旋转" : "Rotate";
+    public static string TipScaleName => Chinese ? "缩放" : "Scale";
+    public static string TipSelect => Chinese ? "选择或移动。" : "Select or move.";
+    public static string TipMove => Chinese ? "移动选中元素。" : "Move selected items.";
+    public static string TipRotate => Chinese ? "旋转选中元素。" : "Rotate selected items.";
+    public static string TipScale => Chinese ? "缩放选中元素。" : "Scale (resize) selected items.";
+    public static string Shortcut => Chinese ? "快捷键" : "Shortcut";
 }

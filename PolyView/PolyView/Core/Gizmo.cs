@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 
 namespace PolyView;
 
@@ -29,13 +29,17 @@ public static class Gizmo
     public const float MoveCenterRadius = 0.08f;
     public const float ViewRingRadius = 1.2f;
 
+    /// <summary>Blender axis letter for an app axis index (app Y-up: 1 = Blender Z, 2 = Blender Y).</summary>
+    public static char BlenderLetter(int appAxis) => appAxis switch { 0 => 'X', 1 => 'Z', _ => 'Y' };
+
     public static readonly Vector3[] Axes = [Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ];
 
     static readonly Vector4[] Rgb =
     [
         new(0xE5 / 255f, 0x4B / 255f, 0x4B / 255f, 1f),
-        new(0x8B / 255f, 0xC3 / 255f, 0x4A / 255f, 1f),
+        // App space is Y-up: app Y is Blender Z (blue, up), app Z is Blender Y (green), matching the grid.
         new(0x4B / 255f, 0x8B / 255f, 0xE5 / 255f, 1f),
+        new(0x8B / 255f, 0xC3 / 255f, 0x4A / 255f, 1f),
         new(0.95f, 0.95f, 0.95f, 1f),
     ];
 

@@ -54,7 +54,7 @@ public partial class MainWindow : Window
 
     void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.OriginalSource is System.Windows.Controls.Primitives.TextBoxBase)
+        if (e.OriginalSource is System.Windows.Controls.Primitives.TextBoxBase && !Viewport.IsTransforming)
         {
             return;
         }
