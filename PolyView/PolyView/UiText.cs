@@ -41,4 +41,24 @@ public static class UiText
     public static string FileFilter => Chinese
         ? "模型文件|*.obj;*.stl;*.glb;*.gltf;*.fbx;*.dae;*.3ds;*.ply;*.json|GLB / glTF|*.glb;*.gltf|FBX|*.fbx|COLLADA (DAE)|*.dae|OBJ|*.obj|STL|*.stl|three.js JSON|*.json|3DS / PLY|*.3ds;*.ply|所有文件|*.*"
         : "Model files|*.obj;*.stl;*.glb;*.gltf;*.fbx;*.dae;*.3ds;*.ply;*.json|GLB / glTF|*.glb;*.gltf|FBX|*.fbx|COLLADA (DAE)|*.dae|OBJ|*.obj|STL|*.stl|three.js JSON|*.json|3DS / PLY|*.3ds;*.ply|All files|*.*";
+
+    public static string ToolSelect => Chinese ? "选择" : "Select";
+
+    public static string ToolMove => Chinese ? "移动 (G)" : "Move (G)";
+
+    public static string ToolRotate => Chinese ? "旋转 (R)" : "Rotate (R)";
+
+    public static string ToolScale => Chinese ? "缩放 (S)" : "Scale (S)";
+
+    public static string HintMove => Chinese
+        ? "拖动箭头沿该轴移动；按 X / Y / Z 锁定轴，右键或 Esc 取消。"
+        : "Drag an arrow to move along that axis. Press X, Y or Z to lock an axis; right-click or Esc to cancel.";
+
+    public static string HintRotate => Chinese
+        ? "拖动圆环绕该轴旋转；按 X / Y / Z 锁定轴，右键或 Esc 取消。"
+        : "Drag a ring to rotate around that axis. Press X, Y or Z to lock an axis; right-click or Esc to cancel.";
+
+    public static string HintScale => Chinese
+        ? "拖动轴端方块沿该轴缩放，拖中心等比缩放；右键或 Esc 取消。"
+        : "Drag a box handle to scale along that axis, or drag the center to scale evenly. Right-click or Esc to cancel.";
 }
