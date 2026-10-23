@@ -57,6 +57,7 @@ public partial class OutlinerPanel : UserControl
         _viewport = viewport;
         viewport.SceneChanged += (_, _) => Rebuild();
         viewport.SelectionChanged += (_, _) => SyncFromViewport();
+        viewport.SelectedIdsChanged += (_, _) => SyncSelectionSetFromViewport();
         viewport.MoveToCollectionRequested += (_, link) => ShowMoveToCollectionMenu(SelectedObjectIds(), viewport, link);
         viewport.ObjectChanged += (_, id) =>
         {
@@ -488,6 +489,45 @@ public partial class OutlinerPanel : UserControl
         UpdateProperties();
     }
 
+    /// <summary>Viewport multi-selection (box select, Shift / Ctrl click) -> outliner object rows.</summary>
+    void SyncSelectionSetFromViewport()
+    {
+        if (_viewport == null || _syncing)
+        {
+            return;
+        }
+
+        var ids = _viewport.SelectedIds;
+        if (ids.Count <= 1)
+        {
+            SyncFromViewport();
+            return;
+        }
+
+        _syncing = true;
+        foreach (var row in ItemList.Items.OfType<OutlinerItem>().ToList())
+        {
+            if (row.ObjectId < 0 || row.IsDataRow || row.IsCollection || row.NodeIndex >= 0)
+            {
+                continue;
+            }
+
+            bool want = ids.Contains(row.ObjectId);
+            bool has = ItemList.SelectedItems.Contains(row);
+            if (want && !has)
+            {
+                ItemList.SelectedItems.Add(row);
+            }
+            else if (!want && has)
+            {
+                ItemList.SelectedItems.Remove(row);
+            }
+        }
+
+        _syncing = false;
+        UpdateProperties();
+    }
+
     void ItemList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_syncing || _viewport == null)
@@ -512,7 +552,16 @@ public partial class OutlinerPanel : UserControl
         if (item != null && item.ObjectId >= 0)
         {
             _active = Root.FindOwner(item.ObjectId) ?? _active;
-            _viewport.SelectNode(item.ObjectId, item.IsDataRow ? -1 : item.NodeIndex);
+            var ids = SelectedObjectIds();
+            if (ids.Count > 1)
+            {
+                // Outliner multi-selection (Ctrl / Shift click) -> viewport selection set; clicked row is active.
+                _viewport.SetSelection(ids, item.ObjectId);
+            }
+            else
+            {
+                _viewport.SelectNode(item.ObjectId, item.IsDataRow ? -1 : item.NodeIndex);
+            }
         }
         else
         {

@@ -434,7 +434,7 @@ public sealed partial class ModelViewport : UserControl
                     return false;
                 }
 
-                RemoveObject(_selectedId);
+                DeleteSelectedConfirm(ask: false);
                 return true;
             case Key.Home:
             case Key.Decimal:

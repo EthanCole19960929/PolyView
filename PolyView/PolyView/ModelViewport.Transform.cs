@@ -814,6 +814,7 @@ public sealed partial class ModelViewport
         _xformPart = part;
         _xformPlane = plane;
         _xformStart = o.Transform;
+        BeginMultiTransform(o);
         _xformMouse0 = mouse;
         if (!modal)
         {
@@ -1009,6 +1010,7 @@ public sealed partial class ModelViewport
         _modalText.Text = status;
         UpdateModalOverlay(mouse, center);
         ApplyTransform(o, ApplyLocks(o.Id, _xformStart, t), commit: false);
+        UpdateMultiTransform(o, commit: false);
     }
 
     void CommitTransform()
@@ -1030,6 +1032,7 @@ public sealed partial class ModelViewport
             }
 
             ApplyTransform(o, o.Transform, commit: true);
+            CommitMultiTransform();
         }
 
         Invalidate();
@@ -1050,6 +1053,7 @@ public sealed partial class ModelViewport
         if (TryGetObject(_selectedId, out var o))
         {
             ApplyTransform(o, _xformStart, commit: true);
+            CancelMultiTransform();
         }
 
         Invalidate();

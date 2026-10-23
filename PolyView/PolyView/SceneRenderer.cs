@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -61,7 +61,7 @@ public sealed class SceneRenderer : IDisposable
 
         float4 PSMask(VsOut input) : SV_Target
         {
-            return 1;
+            return Highlight < -0.5 ? 0.6 : 1;
         }
 
         float4 VSFull(uint id : SV_VertexID) : SV_Position
@@ -78,19 +78,20 @@ public sealed class SceneRenderer : IDisposable
                 discard;
             }
 
+            float m = 0;
             [unroll]
             for (int y = -2; y <= 2; y++)
             {
                 [unroll]
                 for (int x = -2; x <= 2; x++)
                 {
-                    if (SelectionMask.Load(int3(p + int2(x, y), 0)) > 0.5)
-                    {
-                        return Highlight > 0.5 ? float4(1, 1, 1, 1) : float4(1.0, 0.627, 0.157, 1);
-                    }
+                    m = max(m, SelectionMask.Load(int3(p + int2(x, y), 0)));
                 }
             }
 
+            // Active object (mask 1): light orange (white during G/R/S); other selected (mask 0.6): darker orange (Blender).
+            if (m > 0.8) return Highlight > 0.5 ? float4(1, 1, 1, 1) : float4(1.0, 0.627, 0.157, 1);
+            if (m > 0.5) return float4(0.945, 0.345, 0.0, 1);
             discard;
             return 0;
         }
@@ -524,7 +525,7 @@ public sealed class SceneRenderer : IDisposable
             }
 
             bool active = gpu.Id == SelectedId;
-            WriteConstants(gpu.World * Matrix4x4.CreateScale(_lastScale), _lastViewProjection, _lastLight, unlit: false, highlight: active && OutlineWhite ? 1f : 0f);
+            WriteConstants(gpu.World * Matrix4x4.CreateScale(_lastScale), _lastViewProjection, _lastLight, unlit: false, highlight: active ? 0f : -1f);
             _vertexSlot[0] = gpu.Vertices;
             _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
             _context.IASetIndexBuffer(gpu.Indices, Format.R32_UInt, 0);
@@ -549,6 +550,7 @@ public sealed class SceneRenderer : IDisposable
         _context.OMSetBlendState(_alphaBlend);
         _context.IASetInputLayout(null);
         _context.VSSetShader(_fullVertexShader);
+        WriteConstants(Matrix4x4.Identity, _lastViewProjection, _lastLight, unlit: false, highlight: OutlineWhite ? 1f : 0f);
         _context.PSSetShader(_outlineShader);
         _maskSlot[0] = _maskResource;
         _context.PSSetShaderResources(1, 1, _maskSlot);

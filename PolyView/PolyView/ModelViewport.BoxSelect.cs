@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -133,6 +133,7 @@ public sealed partial class ModelViewport
 
         Invalidate();
         ViewChanged?.Invoke(this, EventArgs.Empty);
+        RaiseSelectedIdsChanged();
     }
 
     /// <summary>Objects (visible, in scene order) inside a viewport rectangle in DIPs (origin top-left).</summary>
@@ -240,7 +241,7 @@ public sealed partial class ModelViewport
         }
 
         var mods = Keyboard.Modifiers;
-        if (mods == ModifierKeys.Shift)
+        if (mods is ModifierKeys.Shift or ModifierKeys.Control)
         {
             // Shift+click: add / make active / remove (Blender).
             _leftPressed = false;
@@ -248,7 +249,13 @@ public sealed partial class ModelViewport
             if (id >= 0)
             {
                 var sel = SelectedIds.ToList();
-                if (id == _selectedId)
+                if (mods == ModifierKeys.Control && sel.Contains(id))
+                {
+                    // Ctrl+click toggles.
+                    sel.Remove(id);
+                    SetSelection(sel, id == _selectedId ? (sel.Count > 0 ? sel[0] : -1) : _selectedId);
+                }
+                else if (id == _selectedId)
                 {
                     sel.Remove(id);
                     SetSelection(sel, sel.Count > 0 ? sel[0] : -1);
