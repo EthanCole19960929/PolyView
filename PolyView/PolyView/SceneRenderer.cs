@@ -7,7 +7,7 @@ using Vortice.Mathematics;
 
 namespace PolyView;
 
-public sealed class SceneRenderer : IDisposable
+public sealed partial class SceneRenderer : IDisposable
 {
     const string ShaderSource = """
         cbuffer Frame : register(b0)
@@ -185,11 +185,9 @@ public sealed class SceneRenderer : IDisposable
                 return float4(1 - exp(-sum), 1);
             }
 
-            float key = saturate(dot(normal, LightDirection));
-            float hemisphere = lerp(0.32, 0.55, normal.y * 0.5 + 0.5);
-            float4 albedo = abs(Ambient.w - 2) < 0.5 ? input.Color : BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
-            float3 color = albedo.rgb * (hemisphere + 0.75 * key);
-            return float4(saturate(color), 1);
+            // Blender Solid studio light, linear space, one sRGB encode (SceneRenderer.Shading.cs).
+            float3 albedo = abs(Ambient.w - 2) < 0.5 ? input.Color.rgb : SrgbToLinear(BaseColorMap.Sample(BaseColorSampler, input.TexCoord).rgb) * input.Color.rgb;
+            return float4(StudioSolid(normal, normalize(EyePosition - input.WorldPos), LightDirection, albedo), 1);
         }
         """;
 
@@ -671,8 +669,8 @@ public sealed class SceneRenderer : IDisposable
         float reach = MathF.Max(MathF.Max(MathF.Abs(min.X), MathF.Abs(max.X)), MathF.Max(MathF.Abs(min.Z), MathF.Abs(max.Z)));
         int half = Math.Clamp((int)MathF.Ceiling(MathF.Max(reach, size) * 1.5f / step), 5, 400);
         float extent = half * step;
-        uint minor = Vertex.PackColor(new Vector4(0.30f, 0.31f, 0.33f, 1f));
-        uint major = Vertex.PackColor(new Vector4(0.38f, 0.39f, 0.41f, 1f));
+        uint minor = Vertex.PackColor(GridMinorColor);
+        uint major = Vertex.PackColor(GridMajorColor);
         uint red = Vertex.PackColor(new Vector4(0.80f, 0.25f, 0.28f, 1f));
         uint green = Vertex.PackColor(new Vector4(0.45f, 0.70f, 0.20f, 1f));
         var lines = new List<Vertex>((half * 2 + 1) * 4);
@@ -802,6 +800,7 @@ public sealed class SceneRenderer : IDisposable
         _context.OMSetRenderTargets(1, _targets, _depthView);
         _viewports[0] = new Viewport(0, 0, _pixelWidth, _pixelHeight);
         _context.RSSetViewports(1, _viewports);
+        DrawBackground();
         _context.OMSetDepthStencilState(_depthState, 0);
         _context.IASetInputLayout(_layout);
         _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
@@ -991,7 +990,7 @@ public sealed class SceneRenderer : IDisposable
 
     static byte[] Compile(string entry, string profile)
     {
-        var source = System.Text.Encoding.UTF8.GetBytes(ShaderSource);
+        var source = System.Text.Encoding.UTF8.GetBytes(ShadingSource + ShaderSource);
         int hr = D3DCompile(source, (nuint)source.Length, "mesh.hlsl", IntPtr.Zero, IntPtr.Zero, entry, profile, 0, 0, out var code, out var errors);
         try
         {
