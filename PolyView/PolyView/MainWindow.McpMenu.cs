@@ -65,17 +65,6 @@ public partial class MainWindow
             w.ShowDialog();
         };
         panel.Children.Add(open);
-        panel.Children.Add(new TextBlock { Text = UiText.T("最近调用（最多 20 条）", "Recent calls (last 20)"), Foreground = dim, Margin = new Thickness(0, 0, 0, 3) });
-        var log = new StackPanel();
-        var calls = PolyViewTools.RecentCalls();
-        if (calls.Count == 0) log.Children.Add(new TextBlock { Text = UiText.T("（暂无）", "(none yet)"), Foreground = dim });
-        foreach (var c in calls)
-        {
-            log.Children.Add(new TextBlock { Text = c, Foreground = c.Contains("✗") ? new SolidColorBrush(Color.FromRgb(0xE0, 0x80, 0x60)) : fg,
-                FontFamily = new FontFamily("Consolas"), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis });
-        }
-
-        panel.Children.Add(new ScrollViewer { Content = log, MaxHeight = 260, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
         _mcpPopup = new Popup
         {
             PlacementTarget = MenuMcp, Placement = PlacementMode.Bottom, StaysOpen = false, AllowsTransparency = true,

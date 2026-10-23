@@ -16,7 +16,7 @@ public partial class MainWindow
         InitMcpMenu();
         if (!AppSettings.Current.McpEnabled) return;
         _ = McpServerHost.StartAsync();
-        Task.Run(McpClients.VerifyConnected);
+        _ = Task.Run(McpClients.AutoConnectAll);
         Closed += (_, _) => McpServerHost.StopAsync().Wait(1500);
     }
 

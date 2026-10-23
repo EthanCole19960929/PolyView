@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 
 namespace PolyView.Mcp;
 
-/// <summary>Data-driven AI client registry (mcp-clients.json): detect, connect, disconnect, verify. Never removes other servers; writes a .bak once.</summary>
+/// <summary>Data-driven AI client registry (mcp-clients.json): detect, connect, disconnect, verify. Never removes other servers; no backup files.</summary>
 public sealed class McpClient
 {
     public string Id { get; set; } = "";
@@ -104,12 +104,6 @@ public static class McpClients
         _ => UiText.T($"{c.Name}\uff1a\u5728\u5b83\u7684 MCP \u8bbe\u7f6e\u91cc\u6dfb\u52a0\u670d\u52a1\u5668\uff0c\u7c98\u8d34\u5df2\u590d\u5236\u7684\u914d\u7f6e\uff0c\u6216\u586b\u5730\u5740 {McpServerHost.Url}\u3002", $"{c.Name}: add a server in its MCP settings and paste the copied config, or use URL {McpServerHost.Url}."),
     };
 
-    static void Backup(string path)
-    {
-        var bak = path + ".polyview.bak";
-        if (File.Exists(path) && !File.Exists(bak)) File.Copy(path, bak);
-    }
-
     /// <summary>Add or update the polyview entry. Returns null on success, else an error.</summary>
     public static string? Connect(McpClient c)
     {
@@ -117,7 +111,6 @@ public static class McpClients
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(c.ConfigPath)!);
-            Backup(c.ConfigPath);
             if (c.Format == "toml")
             {
                 var text = File.Exists(c.ConfigPath) ? File.ReadAllText(c.ConfigPath) : "";
@@ -158,7 +151,6 @@ public static class McpClients
         if (c.ConfigPath == null || !File.Exists(c.ConfigPath)) return null;
         try
         {
-            Backup(c.ConfigPath);
             var text = File.ReadAllText(c.ConfigPath);
             if (c.Format == "toml")
             {
@@ -177,21 +169,44 @@ public static class McpClients
         catch (Exception ex) { return ex.Message; }
     }
 
-    /// <summary>On startup: for clients already connected, silently refresh the entry if it no longer matches.</summary>
-    public static void VerifyConnected()
+    public static bool AutoEnabled(McpClient c) => !AppSettings.Current.McpAutoConnectOff.Contains(c.Id);
+
+    /// <summary>On every launch (background): write/refresh the polyview entry into every installed auto-capable client. Idempotent, silent, merges existing config, skips on error.</summary>
+    public static void AutoConnectAll()
     {
-        try
+        List<McpClient> list;
+        try { list = Scan(); }
+        catch (Exception ex) { App.LogException("McpClients.Auto", ex); return; }
+        foreach (var c in list)
         {
-            foreach (var c in Scan().Where(c => c.Connected && c.Format == "json"))
+            try
             {
-                var root = JsonNode.Parse(File.ReadAllText(c.ConfigPath!), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
-                var current = root?[c.Key]?[ServerName]?.ToJsonString();
-                if (current != EntryFor(c).ToJsonString()) Connect(c);
+                if (!c.Installed || !c.CanAuto || c.ConfigPath == null || !AutoEnabled(c) || UpToDate(c)) continue;
+                var err = Connect(c);
+                if (err != null) App.LogException("McpClients.Auto " + c.Id, new IOException(err));
             }
+            catch (Exception ex) { App.LogException("McpClients.Auto " + c.Id, ex); }
         }
-        catch (Exception ex) { App.LogException("McpClients.Verify", ex); }
     }
 
+    /// <summary>True when the config already has our current entry (or another entry pointing at our port).</summary>
+    public static bool UpToDate(McpClient c)
+    {
+        if (c.ConfigPath == null || !File.Exists(c.ConfigPath)) return false;
+        var text = File.ReadAllText(c.ConfigPath);
+        if (text.Trim().Length == 0) return false;
+        if (c.Format == "toml")
+        {
+            if (!text.Contains($"[{c.Key}.{ServerName}]")) return text.Contains("127.0.0.1:47800");
+            return text.Contains(McpServerHost.Url);
+        }
+
+        var root = JsonNode.Parse(text, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonObject
+            ?? throw new InvalidDataException("config root is not an object");
+        var current = root[c.Key]?[ServerName];
+        if (current == null) return text.Contains("127.0.0.1:47800");
+        return current.ToJsonString() == EntryFor(c).ToJsonString();
+    }
     static void WriteAtomic(string path, string text)
     {
         var tmp = path + ".tmp";

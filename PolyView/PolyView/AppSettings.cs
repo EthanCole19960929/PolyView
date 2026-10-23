@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 
 namespace PolyView;
@@ -10,6 +10,9 @@ public sealed class AppSettings
 
     /// <summary>Start the built-in MCP server (http://127.0.0.1:47800/mcp) with the app.</summary>
     public bool McpEnabled { get; set; } = true;
+
+    /// <summary>Client ids the user opted out of automatic MCP connection (default: none, all auto).</summary>
+    public List<string> McpAutoConnectOff { get; set; } = [];
 
     public static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PolyView", "settings.json");

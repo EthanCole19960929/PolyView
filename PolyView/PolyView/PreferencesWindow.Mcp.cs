@@ -12,7 +12,6 @@ public partial class PreferencesWindow
 
     /// <summary>Open on a given category (e.g. "AI").</summary>
     public void ShowCategory(string key) { _category = key; Rebuild(); }
-    readonly HashSet<string> _mcpChecked = [];
 
     static readonly Brush OkBrush = new SolidColorBrush(Color.FromRgb(0x7C, 0xC4, 0x6A));
     static readonly Brush WarnBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0x9A, 0x4A));
@@ -76,37 +75,46 @@ public partial class PreferencesWindow
         {
             list.Children.Clear();
             var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
-            head.Children.Add(Cell("", null, 24));
-            head.Children.Add(Cell(UiText.T("AI 客户端", "AI client"), DimBrush, 170));
-            head.Children.Add(Cell(UiText.T("已安装", "Installed"), DimBrush));
-            head.Children.Add(Cell(UiText.T("运行中", "Running"), DimBrush));
-            head.Children.Add(Cell(UiText.T("已连接", "Connected"), DimBrush));
+            head.Children.Add(Cell(UiText.T("AI \u5ba2\u6237\u7aef", "AI client"), DimBrush, 190));
+            head.Children.Add(Cell(UiText.T("\u72b6\u6001", "Status"), DimBrush, 120));
             list.Children.Add(head);
-            foreach (var c in _mcpClients)
+            foreach (var c in _mcpClients.OrderByDescending(c => c.Installed))
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 1) };
-                var cb = new CheckBox { IsEnabled = true, IsHitTestVisible = true, IsChecked = _mcpChecked.Contains(c.Id), Width = 24, Style = (Style)FindResource("PrefCheck"), VerticalAlignment = VerticalAlignment.Center };
-                var id = c.Id;
-                cb.Click += (_, _) => { if (cb.IsChecked == true) _mcpChecked.Add(id); else _mcpChecked.Remove(id); };
-                row.Children.Add(cb);
-                var nameCell = Cell(c.Name, c.Installed ? Brushes.White : DimBrush, 170);
-                nameCell.Background = Brushes.Transparent;
-                nameCell.MouseLeftButtonUp += (_, _) => { cb.IsChecked = cb.IsChecked != true; if (cb.IsChecked == true) _mcpChecked.Add(id); else _mcpChecked.Remove(id); };
-                row.Children.Add(nameCell);
-                row.Children.Add(Cell(c.Installed ? "✔" : "—", c.Installed ? OkBrush : DimBrush));
-                row.Children.Add(Cell(c.ProcessRunning ? "✔" : "—", c.ProcessRunning ? OkBrush : DimBrush));
-                row.Children.Add(Cell(c.Connected ? "✔" : "—", c.Connected ? OkBrush : DimBrush));
-                if (!c.CanAuto)
+                row.Children.Add(Cell(c.Name, c.Installed ? Brushes.White : DimBrush, 190));
+                var cc = c;
+                if (!c.Installed)
                 {
-                    row.Children.Add(new Border { Background = WarnBrush, CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center,
-                        Child = new TextBlock { Text = UiText.T("手动", "Manual"), Foreground = Brushes.Black, FontSize = 11 } });
-                    var cc = c;
-                    var btn = PrefButton(UiText.T("\u590d\u5236\u914d\u7f6e", "Copy config"), () => { Clipboard.SetText(McpClients.SnippetFor(cc)); message.Text = UiText.T($"\u5df2\u590d\u5236 {cc.Name} \u7684\u914d\u7f6e\uff0c\u8bf7\u5728\u5b83\u7684 MCP \u8bbe\u7f6e\u91cc\u7c98\u8d34\uff08\u5730\u5740 {McpServerHost.Url}\uff09\u3002", $"Copied config for {cc.Name}; paste it in its MCP settings."); });
+                    row.Children.Add(Cell(UiText.T("\u672a\u5b89\u88c5", "Not installed"), DimBrush, 120));
+                }
+                else if (c.CanAuto)
+                {
+                    bool on = McpClients.AutoEnabled(c);
+                    row.Children.Add(on
+                        ? Cell(c.Connected ? UiText.T("\u2714 \u5df2\u81ea\u52a8\u8fde\u63a5", "\u2714 Auto-connected") : UiText.T("\u8fde\u63a5\u5931\u8d25", "Not connected"), c.Connected ? OkBrush : WarnBrush, 120)
+                        : Cell(UiText.T("\u5df2\u5173\u95ed", "Off"), DimBrush, 120));
+                    var cb = new CheckBox { Content = UiText.T("\u81ea\u52a8\u8fde\u63a5", "Auto-connect"), IsChecked = on, Foreground = DimBrush, Style = (Style)FindResource("PrefCheck"), VerticalAlignment = VerticalAlignment.Center };
+                    cb.Click += (_, _) =>
+                    {
+                        var off = AppSettings.Current.McpAutoConnectOff;
+                        off.Remove(cc.Id);
+                        if (cb.IsChecked != true) off.Add(cc.Id);
+                        AppSettings.Current.Save();
+                        var err = cb.IsChecked == true ? McpClients.Connect(cc) : McpClients.Disconnect(cc);
+                        message.Text = err != null ? cc.Name + ": " + err : cc.ProcessRunning ? UiText.T($"\u8bf7\u91cd\u542f {cc.Name} \u4ee5\u751f\u6548\u3002", $"Restart {cc.Name} to apply.") : "";
+                        Scan();
+                    };
+                    row.Children.Add(cb);
+                }
+                else
+                {
+                    row.Children.Add(Cell(UiText.T("\u9700\u624b\u52a8\u7c98\u8d34", "Paste manually"), WarnBrush, 120));
+                    var btn = PrefButton(UiText.T("\u590d\u5236\u914d\u7f6e", "Copy config"), () => { Clipboard.SetText(McpClients.SnippetFor(cc)); message.Text = UiText.T("\u5df2\u590d\u5236\u914d\u7f6e\u3002", "Config copied. ") + McpClients.ManualSteps(cc); });
                     btn.Height = 20;
                     row.Children.Add(btn);
                 }
 
-                row.ToolTip = c.ConfigPath ?? UiText.T("该客户端需在其设置里手动粘贴配置", "Paste the copied config in this client's settings");
+                row.ToolTip = c.ConfigPath ?? UiText.T("\u8be5\u5ba2\u6237\u7aef\u9700\u5728\u5176\u8bbe\u7f6e\u91cc\u624b\u52a8\u7c98\u8d34\u914d\u7f6e", "Paste the copied config in this client's settings");
                 list.Children.Add(row);
             }
         }
@@ -114,53 +122,17 @@ public partial class PreferencesWindow
         void Scan()
         {
             _mcpClients = McpClients.Scan();
-            if (_mcpChecked.Count == 0)
-            {
-                foreach (var c in _mcpClients.Where(c => c.Installed && c.CanAuto && !c.Connected)) _mcpChecked.Add(c.Id);
-            }
-
             Fill();
         }
 
-        void Apply(bool connect)
-        {
-            var done = new List<string>();
-            var restart = new List<string>();
-            var manual = new List<string>();
-            var manualClients = new List<McpClient>();
-            var failed = new List<string>();
-            foreach (var c in _mcpClients.Where(c => _mcpChecked.Contains(c.Id)))
-            {
-                if (!c.CanAuto) { manual.Add(c.Name); if (connect) manualClients.Add(c); continue; }
-                var err = connect ? McpClients.Connect(c) : McpClients.Disconnect(c);
-                if (err != null) { failed.Add($"{c.Name}: {err}"); continue; }
-                done.Add(c.Name);
-                if (c.ProcessRunning) restart.Add(c.Name);
-            }
-
-            if (manual.Count > 0 && connect) Clipboard.SetText(manualClients.Count == 1 ? McpClients.SnippetFor(manualClients[0]) : McpClients.HttpSnippet);
-            var parts = new List<string>();
-            if (done.Count > 0) parts.Add((connect ? UiText.T("已连接：", "Connected: ") : UiText.T("已断开：", "Disconnected: ")) + string.Join("、", done));
-            if (restart.Count > 0) parts.Add(UiText.T("请重启以生效：", "Restart to apply: ") + string.Join("、", restart));
-            if (manual.Count > 0 && connect) parts.Add(UiText.T("需手动粘贴（配置已复制到剪贴板）：", "Paste manually (config copied): ") + string.Join("、", manual));
-            if (failed.Count > 0) parts.Add(UiText.T("失败：", "Failed: ") + string.Join("；", failed));
-            message.Text = parts.Count > 0 ? string.Join("\n", parts) : UiText.T("没有勾选任何客户端。", "No client selected.");
-            Scan();
-            if (manualClients.Count > 0)
-            {
-                var steps = string.Join("\n\n", manualClients.Select(McpClients.ManualSteps));
-                PvMessageDialog.Show(this, UiText.T("\u914d\u7f6e\u5df2\u590d\u5236\u5230\u526a\u8d34\u677f\u3002\u8bf7\u5728\u4e0b\u5217 AI \u8f6f\u4ef6\u91cc\u6dfb\u52a0\uff1a", "Config copied to the clipboard. Add it in:") + "\n\n" + steps + "\n\n" + McpClients.SnippetFor(manualClients[0]),
-                    UiText.T("\u624b\u52a8\u8fde\u63a5 AI", "Connect AI manually"), MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-        }
-
-        var buttons = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
-        buttons.Children.Add(PrefButton(UiText.T("扫描", "Scan"), () => { Scan(); message.Text = UiText.T("已扫描本机 AI 客户端。", "Scanned this PC."); }));
-        buttons.Children.Add(PrefButton(UiText.T("一键连接 AI（连接所选）", "Connect selected"), () => Apply(true), primary: true));
-        buttons.Children.Add(PrefButton(UiText.T("断开", "Disconnect"), () => Apply(false)));
-        host.Children.Add(buttons);
+        host.Children.Add(new TextBlock { Text = UiText.T("PolyView \u542f\u52a8\u65f6\u4f1a\u81ea\u52a8\u8fde\u63a5\u5df2\u5b89\u88c5\u7684 AI\uff0c\u65e0\u9700\u4efb\u4f55\u64cd\u4f5c\uff1b\u7b2c\u4e00\u6b21\u8fde\u63a5\u540e\u9700\u91cd\u542f\u4e00\u6b21\u8be5 AI\u3002", "PolyView connects installed AI apps automatically on launch; restart an AI once after its first connection."),
+            Foreground = DimBrush, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
         host.Children.Add(list);
         host.Children.Add(message);
+        var refresh = PrefButton(UiText.T("\u5237\u65b0", "Refresh"), Scan);
+        refresh.HorizontalAlignment = HorizontalAlignment.Left;
+        refresh.Margin = new Thickness(0, 6, 0, 0);
+        host.Children.Add(refresh);
         Scan();
         return host;
     }
