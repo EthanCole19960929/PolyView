@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         Outliner.Attach(Viewport);
         ApplyLanguage();
         InitProject();
+        InitExport();
         InitMcp();
 
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
