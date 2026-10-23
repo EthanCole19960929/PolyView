@@ -26,3 +26,9 @@ PolyView 格式测试模型（全部 CC0 公共领域授权）
 02_带贴图_watertower：KayKit City Builder Bits 的 watertower，OBJ+MTL、FBX、glTF+bin 三种，都引用同一张 citybits_texture.png，测试贴图路径解析。
 03_带骨骼_Knight：KayKit Adventurers 的 Knight，FBX 格式，带骨骼和动画，可与 Models\Knight.glb 对比。
 来源：https://kenney.nl/assets/space-kit 、https://kaylousberg.itch.io/city-builder-bits 、https://kaylousberg.itch.io/kaykit-adventurers
+
+camera_light_test.glb
+  来源：PolyView 团队自己用 SharpGLTF.Toolkit 1.0.7 生成（生成工具不入库）
+  授权：CC0-1.0
+  日期：2026-10-23
+  内容：Cube 网格；Rig（空节点）下的透视相机 Camera；KHR_lights_punctual 的 Sun / PointLight / SpotLight；节点 extras.polyview_light 的面光 AreaLight；场景 extras.polyview_world 的 World 环境光。用于验证灯光 / 相机导入（docs/07）。
