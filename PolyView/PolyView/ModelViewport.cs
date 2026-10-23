@@ -21,7 +21,14 @@ public sealed class ModelViewport : UserControl
     D3D9.IDirect3DTexture9? _sharedTexture;
     OrbitCamera _camera = OrbitCamera.Default();
     Vector3 _scale = Vector3.One;
-    MeshData? _mesh;
+    readonly List<SceneObject> _objects = [];
+    int _nextId = 1;
+    int _selectedId = -1;
+    Vector3 _sceneMin = -Vector3.One;
+    Vector3 _sceneMax = Vector3.One;
+    Point _pressPoint;
+    bool _leftPressed;
+    bool _wireframe;
     Point _lastPoint;
     DragMode _drag;
     int _loadVersion;
@@ -34,12 +41,50 @@ public sealed class ModelViewport : UserControl
     /// <summary>模型、错误信息变化时触发（不是每帧）。</summary>
     public event EventHandler? ViewChanged;
 
-    public string MeshName => _mesh?.Name ?? "";
-    public int VertexCount => _mesh?.Vertices.Length ?? 0;
-    public int TriangleCount => _mesh?.TriangleCount ?? 0;
-    public string MeshNotice => _mesh?.Notice ?? "";
+
+    /// <summary>选中对象变化；参数为新的对象 id，-1 表示取消选择。</summary>
+    public event EventHandler<int>? SelectionChanged;
+
+    /// <summary>对象增删（打开 / 追加 / 移除 / 清空）后触发，场景树据此重建。</summary>
+    public event EventHandler? SceneChanged;
+
+    // 状态栏：有选中时显示选中对象，否则显示整个场景（单个对象名或「N 个对象」+ 合计）。
+    public string MeshName => TryGetObject(_selectedId, out var o) ? o.Name
+        : _objects.Count == 1 ? _objects[0].Name
+        : _objects.Count == 0 ? "" : $"{_objects.Count} objects";
+    public int VertexCount => TryGetObject(_selectedId, out var o) ? o.VertexCount : SumVertices();
+    public int TriangleCount => TryGetObject(_selectedId, out var o) ? o.TriangleCount : SumTriangles();
+    public string MeshNotice => TryGetObject(_selectedId, out var o) ? o.Mesh.Notice
+        : _objects.Count == 1 ? _objects[0].Mesh.Notice : "";
     public string? Failure => _failure;
-    public bool HasMesh => _mesh != null;
+    public bool HasMesh => _objects.Count > 0;
+
+    /// <summary>当前场景所有对象 id（按加载顺序）。</summary>
+    public IReadOnlyList<int> ObjectIds => _objects.ConvertAll(o => o.Id);
+
+    /// <summary>当前选中对象 id，-1 表示无；赋值等同 Select。</summary>
+    public int SelectedId
+    {
+        get => _selectedId;
+        set => Select(value);
+    }
+
+    /// <summary>线框显示（快捷键 Shift+Z）。</summary>
+    public bool Wireframe
+    {
+        get => _wireframe;
+        set
+        {
+            _wireframe = value;
+            if (_renderer != null)
+            {
+                _renderer.Wireframe = value;
+            }
+
+            Invalidate();
+            ViewChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
     public bool Orthographic => _camera.Orthographic;
 
     /// <summary>上一次打开模型时，读取 + 解析文件的耗时（毫秒）。</summary>
@@ -79,17 +124,210 @@ public sealed class ModelViewport : UserControl
 
     public void ShowSample()
     {
-        ApplyMesh(MeshBuilder.CreateBar());
+        ApplyMesh(MeshBuilder.CreateBar(), null, append: false);
     }
 
-    public void LoadPath(string path)
+    public bool TryGetObjectInfo(int id, out SceneObjectInfo info)
     {
+        if (TryGetObject(id, out var o))
+        {
+            info = new SceneObjectInfo(o.Id, o.Name, o.SourcePath, o.VertexCount, o.TriangleCount, o.Min, o.Max, o.Visible);
+            return true;
+        }
+
+        info = default;
+        return false;
+    }
+
+    /// <summary>选中指定对象（-1 或不存在的 id 视为取消选择），变化时触发 SelectionChanged。</summary>
+    public void Select(int id)
+    {
+        if (!TryGetObject(id, out _))
+        {
+            id = -1;
+        }
+
+        if (id == _selectedId)
+        {
+            return;
+        }
+
+        _selectedId = id;
+        if (_renderer != null)
+        {
+            _renderer.SelectedId = id;
+        }
+
+        Invalidate();
+        SelectionChanged?.Invoke(this, id);
+        ViewChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>视口坐标（DIP，相对本控件左上角）下的射线拾取，返回最近命中的对象 id，没打中返回 -1。</summary>
+    public int PickAt(Point position)
+    {
+        if (_objects.Count == 0 || ActualWidth <= 0 || ActualHeight <= 0)
+        {
+            return -1;
+        }
+
+        float aspect = (float)(ActualWidth / ActualHeight);
+        SceneRenderer.GetViewProjection(_camera, _scale, SceneRadius, aspect, out var view, out var projection);
+        var ray = Picking.CreateRay((float)position.X, (float)position.Y, (float)ActualWidth, (float)ActualHeight, view, projection);
+        return Picking.Pick(ray, _objects, Matrix4x4.CreateScale(_scale)).ObjectId;
+    }
+
+    /// <summary>对象属性（可见性 / 变换）变化，参数为对象 id。</summary>
+    public event EventHandler<int>? ObjectChanged;
+
+    /// <summary>属性栏用的变换文本；没有变换功能前返回空字符串。</summary>
+    public string GetObjectTransformText(int id) => "";
+
+    /// <summary>显示 / 隐藏对象：只影响显示和拾取，不删除。</summary>
+    public void SetObjectVisible(int id, bool visible)
+    {
+        if (!TryGetObject(id, out var o) || o.Visible == visible)
+        {
+            return;
+        }
+
+        o.Visible = visible;
+        _renderer?.SetVisible(id, visible);
+        Invalidate();
+        ObjectChanged?.Invoke(this, id);
+    }
+
+    /// <summary>移除一个对象并释放其 GPU 资源。</summary>
+    public void RemoveObject(int id)
+    {
+        int index = _objects.FindIndex(o => o.Id == id);
+        if (index < 0)
+        {
+            return;
+        }
+
+        _objects.RemoveAt(index);
+        _renderer?.RemoveMesh(id);
+        if (_selectedId == id)
+        {
+            Select(-1);
+        }
+
+        UpdateSceneBounds();
+        Invalidate();
+        SceneChanged?.Invoke(this, EventArgs.Empty);
+        ViewChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void ClearScene()
+    {
+        _objects.Clear();
+        _renderer?.ClearMeshes();
+        Select(-1);
+        UpdateSceneBounds();
+        Invalidate();
+        SceneChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    bool TryGetObject(int id, out SceneObject obj)
+    {
+        for (int i = 0; i < _objects.Count; i++)
+        {
+            if (_objects[i].Id == id)
+            {
+                obj = _objects[i];
+                return true;
+            }
+        }
+
+        obj = null!;
+        return false;
+    }
+
+    int SumVertices()
+    {
+        int sum = 0;
+        foreach (var o in _objects)
+        {
+            sum += o.VertexCount;
+        }
+
+        return sum;
+    }
+
+    int SumTriangles()
+    {
+        int sum = 0;
+        foreach (var o in _objects)
+        {
+            sum += o.TriangleCount;
+        }
+
+        return sum;
+    }
+
+    float SceneRadius => MathF.Max((_sceneMax - _sceneMin).Length() * 0.5f, 1e-4f);
+
+    void UpdateSceneBounds()
+    {
+        if (_objects.Count == 0)
+        {
+            _sceneMin = -Vector3.One;
+            _sceneMax = Vector3.One;
+        }
+        else
+        {
+            _sceneMin = new Vector3(float.MaxValue);
+            _sceneMax = new Vector3(float.MinValue);
+            foreach (var o in _objects)
+            {
+                _sceneMin = Vector3.Min(_sceneMin, o.Min);
+                _sceneMax = Vector3.Max(_sceneMax, o.Max);
+            }
+        }
+
+        _renderer?.UpdateGrid(_sceneMin, _sceneMax);
+    }
+
+    /// <summary>替换场景：清空后只放这个文件。</summary>
+    public void LoadPath(string path) => LoadPaths([path]);
+
+    /// <summary>追加到场景（多文件打开），新对象获得新 id，不影响已有对象。</summary>
+    public void AddPath(string path)
+    {
+        Task.Run(() => MeshImporter.Load(path)).ContinueWith(task =>
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                var result = task.Result;
+                if (!result.Ok || result.Mesh == null)
+                {
+                    _failure = result.Error;
+                    ViewChanged?.Invoke(this, EventArgs.Empty);
+                    return;
+                }
+
+                _failure = null;
+                ApplyMesh(result.Mesh, path, append: true);
+            });
+        });
+    }
+
+    /// <summary>一次打开多个文件：后台依次导入，回到 UI 线程后第一个替换场景、其余追加。失败的跳过并记到 Failure。</summary>
+    public void LoadPaths(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0)
+        {
+            return;
+        }
+
+        var list = paths.ToArray();
         int version = ++_loadVersion;
         Task.Run(() =>
         {
             var watch = System.Diagnostics.Stopwatch.StartNew();
-            var result = MeshImporter.Load(path);
-            return (result, watch.Elapsed.TotalMilliseconds);
+            var results = Array.ConvertAll(list, MeshImporter.Load);
+            return (results, watch.Elapsed.TotalMilliseconds);
         }).ContinueWith(task =>
         {
             Dispatcher.BeginInvoke(() =>
@@ -99,48 +337,73 @@ public sealed class ModelViewport : UserControl
                     return;
                 }
 
-                var (result, loadMs) = task.Result;
-                if (!result.Ok || result.Mesh == null)
+                var (results, loadMs) = task.Result;
+                bool append = false;
+                string? failure = null;
+                for (int i = 0; i < list.Length; i++)
                 {
-                    _failure = result.Error;
-                    ViewChanged?.Invoke(this, EventArgs.Empty);
-                    _bench?.Fail(result.Error ?? "load failed");
-                    return;
+                    var result = results[i];
+                    if (!result.Ok || result.Mesh == null)
+                    {
+                        failure = list.Length == 1 ? result.Error : $"{System.IO.Path.GetFileName(list[i])}: {result.Error}";
+                        continue;
+                    }
+
+                    _failure = null;
+                    LastLoadMilliseconds = loadMs;
+                    ApplyMesh(result.Mesh, list[i], append);
+                    append = true;
                 }
 
-                _failure = null;
-                LastLoadMilliseconds = loadMs;
-                ApplyMesh(result.Mesh);
+                if (failure != null)
+                {
+                    _failure = failure;
+                    ViewChanged?.Invoke(this, EventArgs.Empty);
+                    if (!append)
+                    {
+                        _bench?.Fail(failure);
+                    }
+                }
             });
         });
     }
 
     public void ResetView()
     {
+        // 复位视角：相机和缩放都回默认（透视 / 正交模式保留）。
         _scale = Vector3.One;
-        if (_mesh != null)
-        {
-            bool ortho = _camera.Orthographic;
-            _camera.Frame(_mesh.Min, _mesh.Max);
-            _camera.Orthographic = ortho;
-        }
+        bool ortho = _camera.Orthographic;
+        _camera = OrbitCamera.Default();
+        _camera.Frame(_sceneMin, _sceneMax);
+        _camera.Orthographic = ortho;
 
         Invalidate();
         ViewChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    public void SetScale(float uniform)
-    {
-        _scale = new Vector3(uniform);
-        Invalidate();
     }
 
     /// <summary>Blender 风格快捷键。返回 true 表示已处理。</summary>
     public bool HandleKey(Key key, ModifierKeys modifiers)
     {
         bool ctrl = (modifiers & ModifierKeys.Control) != 0;
+        if (key == Key.Z && modifiers == ModifierKeys.Shift)
+        {
+            Wireframe = !Wireframe;
+            return true;
+        }
+
         switch (key)
         {
+            case Key.Escape:
+                Select(-1);
+                return true;
+            case Key.Delete:
+                if (_selectedId < 0)
+                {
+                    return false;
+                }
+
+                RemoveObject(_selectedId);
+                return true;
             case Key.Home:
             case Key.Decimal:
                 FrameAll();
@@ -166,14 +429,14 @@ public sealed class ModelViewport : UserControl
 
     void FrameAll()
     {
-        if (_mesh == null)
+        if (_objects.Count == 0)
         {
             return;
         }
 
         float yaw = _camera.Yaw;
         float pitch = _camera.Pitch;
-        _camera.Frame(_mesh.Min, _mesh.Max);
+        _camera.Frame(_sceneMin, _sceneMax);
         _camera.SetView(yaw, pitch);
         Invalidate();
     }
@@ -191,14 +454,29 @@ public sealed class ModelViewport : UserControl
         LoadPath(path);
     }
 
-    void ApplyMesh(MeshData mesh)
+    void ApplyMesh(MeshData mesh, string? path, bool append)
     {
-        _mesh = mesh;
+        if (!append)
+        {
+            _objects.Clear();
+            _renderer?.ClearMeshes();
+            Select(-1);
+        }
+
+        var obj = new SceneObject
+        {
+            Id = _nextId++,
+            Name = path == null ? mesh.Name : System.IO.Path.GetFileName(path),
+            SourcePath = path,
+            Mesh = mesh,
+        };
+        _objects.Add(obj);
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        _renderer?.SetMesh(mesh);
+        _renderer?.AddMesh(obj.Id, mesh);
         LastUploadMilliseconds = _renderer == null ? 0 : watch.Elapsed.TotalMilliseconds;
+        UpdateSceneBounds();
         bool ortho = _camera.Orthographic;
-        _camera.Frame(mesh.Min, mesh.Max);
+        _camera.Frame(_sceneMin, _sceneMax);
         _camera.Orthographic = ortho;
         _scale = Vector3.One;
         Invalidate();
@@ -207,6 +485,7 @@ public sealed class ModelViewport : UserControl
             _bench.MeshReady(this);
         }
 
+        SceneChanged?.Invoke(this, EventArgs.Empty);
         ViewChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -216,7 +495,9 @@ public sealed class ModelViewport : UserControl
         {
             _renderer = SceneRenderer.Create();
             CreateD3D9();
-            if (_mesh == null)
+            _renderer.Wireframe = _wireframe;
+            _renderer.SelectedId = _selectedId;
+            if (_objects.Count == 0)
             {
                 if (_bench == null)
                 {
@@ -226,8 +507,14 @@ public sealed class ModelViewport : UserControl
             else
             {
                 var watch = System.Diagnostics.Stopwatch.StartNew();
-                _renderer.SetMesh(_mesh);
+                foreach (var o in _objects)
+                {
+                    _renderer.AddMesh(o.Id, o.Mesh);
+                    _renderer.SetVisible(o.Id, o.Visible);
+                }
+
                 LastUploadMilliseconds = watch.Elapsed.TotalMilliseconds;
+                UpdateSceneBounds();
             }
 
             if (!_renderingHooked)
@@ -297,8 +584,7 @@ public sealed class ModelViewport : UserControl
 
     void RenderFrame()
     {
-        float radius = _mesh == null ? 1f : (_mesh.Max - _mesh.Min).Length() * 0.5f;
-        _renderer!.Render(_camera, _scale, radius);
+        _renderer!.Render(_camera, _scale, SceneRadius);
     }
 
     void ResizeSurface()
@@ -361,6 +647,13 @@ public sealed class ModelViewport : UserControl
             // 没有中键时的备用：Alt+左键环绕，Alt+Shift+左键平移；普通左键留给选择 / 变换手柄
             BeginDrag((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? DragMode.Pan : DragMode.Orbit, MouseButton.Left, e);
         }
+        else if (e.ChangedButton == MouseButton.Left && _drag == DragMode.None)
+        {
+            // 普通左键：记下按下位置，松开时没怎么移动就当作单击拾取。
+            _leftPressed = true;
+            _pressPoint = e.GetPosition(this);
+            e.Handled = true;
+        }
         else
         {
             base.OnMouseDown(e);
@@ -373,6 +666,18 @@ public sealed class ModelViewport : UserControl
         {
             _drag = DragMode.None;
             ReleaseMouseCapture();
+            e.Handled = true;
+        }
+        else if (e.ChangedButton == MouseButton.Left && _leftPressed)
+        {
+            _leftPressed = false;
+            var point = e.GetPosition(this);
+            if ((point - _pressPoint).Length < 4)
+            {
+                // 打中最近的对象就选中它；点空白处取消选择。
+                Select(PickAt(point));
+            }
+
             e.Handled = true;
         }
         else

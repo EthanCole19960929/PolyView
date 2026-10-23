@@ -25,6 +25,7 @@
             </WrapPanel>
         </Border>
         <TextBlock x:Name="HintText" DockPanel.Dock="Bottom" Margin="12,8" Foreground="#FFB5B5B5"/>
+        <local:OutlinerPanel x:Name="Outliner" DockPanel.Dock="Right" Width="260"/>
         <local:ModelViewport x:Name="Viewport"/>
     </DockPanel>
 </Window>

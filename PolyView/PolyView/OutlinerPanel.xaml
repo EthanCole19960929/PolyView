@@ -1,0 +1,59 @@
+<UserControl x:Class="PolyView.OutlinerPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#FF24272D">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="SceneHeader" Grid.Row="0" Margin="8,6" Foreground="#FFE6E6E6" FontWeight="SemiBold"/>
+        <ListBox x:Name="ItemList"
+                 Grid.Row="1"
+                 Background="#FF1E2126"
+                 BorderThickness="0"
+                 Foreground="#FFDADADA"
+                 SelectionMode="Single"
+                 HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.CanContentScroll="True"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 VirtualizingPanel.ScrollUnit="Pixel"
+                 SelectionChanged="ItemList_SelectionChanged">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <VirtualizingStackPanel/>
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid Margin="{Binding IndentMargin}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="22"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="26"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding Icon}" Foreground="{Binding IconBrush}"
+                                   FontFamily="Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" Opacity="{Binding NameOpacity}"/>
+                        <ToggleButton Grid.Column="2" Width="22" Height="20" Padding="0"
+                                      Background="Transparent" BorderThickness="0" Foreground="#FFCFCFCF"
+                                      FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                      Content="{Binding EyeGlyph}"
+                                      IsChecked="{Binding Visible, Mode=TwoWay}"
+                                      Visibility="{Binding EyeVisibility}"
+                                      Focusable="False"
+                                      ToolTip="{Binding EyeTip}"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <TextBlock x:Name="PropertyHeader" Grid.Row="2" Margin="8,8,8,2" Foreground="#FFE6E6E6" FontWeight="SemiBold"/>
+        <TextBlock x:Name="PropertyText" Grid.Row="3" Margin="8,0,8,8" Foreground="#FFC8C8C8"
+                   FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" MinHeight="120"/>
+    </Grid>
+</UserControl>

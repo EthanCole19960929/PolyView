@@ -16,6 +16,8 @@ public sealed class SceneRenderer : IDisposable
             float4x4 NormalWorld;
             float3 LightDirection;
             float Unlit;
+            float Highlight;
+            float3 Padding;
         };
 
         Texture2D BaseColorMap : register(t0);
@@ -65,6 +67,8 @@ public sealed class SceneRenderer : IDisposable
             float hemisphere = lerp(0.32, 0.55, normal.y * 0.5 + 0.5);
             float4 albedo = BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
             float3 color = albedo.rgb * (hemisphere + 0.75 * key);
+            // 选中高亮：往橙色混一部分，贴图模型 / 线框下也看得出来。
+            color = lerp(color, float3(1.0, 0.62, 0.18), Highlight * 0.45);
             return float4(saturate(color), 1);
         }
         """;
@@ -83,8 +87,7 @@ public sealed class SceneRenderer : IDisposable
     readonly ID3D11SamplerState _sampler;
     readonly ID3D11Texture2D _whiteTexture;
     readonly ID3D11ShaderResourceView _whiteView;
-    readonly List<(ID3D11Texture2D Texture, ID3D11ShaderResourceView View)> _meshTextures = [];
-    MeshPart[] _parts = [];
+    readonly List<GpuObject> _objects = [];
     ID3D11Buffer? _gridVertices;
     uint _gridVertexCount;
     readonly ID3D11ShaderResourceView[] _textureSlot = new ID3D11ShaderResourceView[1];
@@ -99,15 +102,17 @@ public sealed class SceneRenderer : IDisposable
     readonly ID3D11Buffer[] _vertexSlot = new ID3D11Buffer[1];
     readonly uint[] _stride = new uint[1];
     readonly uint[] _offset = new uint[1];
-    ID3D11Buffer? _vertices;
-    ID3D11Buffer? _indices;
-    int _indexCount;
     int _pixelWidth = 1;
     int _pixelHeight = 1;
 
     public ID3D11Texture2D? ColorTexture => _color;
     public string DeviceName { get; }
     public bool Wireframe { get; set; }
+
+    /// <summary>当前高亮的对象 id，-1 表示无。</summary>
+    public int SelectedId { get; set; } = -1;
+
+    public int ObjectCount => _objects.Count;
 
     SceneRenderer(ID3D11Device device, ID3D11DeviceContext context, string deviceName)
     {
@@ -192,28 +197,71 @@ public sealed class SceneRenderer : IDisposable
         throw new InvalidOperationException(error);
     }
 
-    public void SetMesh(MeshData mesh)
+    /// <summary>上传一个对象的顶点 / 索引 / 贴图（加载时调用一次，不在渲染循环里）。同 id 已存在时先替换。</summary>
+    public void AddMesh(int id, MeshData mesh)
     {
-        _vertices?.Dispose();
-        _indices?.Dispose();
-        _vertices = _device.CreateBuffer(mesh.Vertices, BindFlags.VertexBuffer);
-        _indices = _device.CreateBuffer(mesh.Indices, BindFlags.IndexBuffer);
-        _indexCount = mesh.Indices.Length;
-        foreach (var (texture, view) in _meshTextures)
+        RemoveMesh(id);
+        var gpu = new GpuObject
         {
-            view.Dispose();
-            texture.Dispose();
-        }
-
-        _meshTextures.Clear();
+            Id = id,
+            Vertices = _device.CreateBuffer(mesh.Vertices, BindFlags.VertexBuffer),
+            Indices = _device.CreateBuffer(mesh.Indices, BindFlags.IndexBuffer),
+            IndexCount = mesh.Indices.Length,
+            Parts = mesh.Parts.Length > 0
+                ? mesh.Parts
+                : [new MeshPart { StartIndex = 0, IndexCount = mesh.Indices.Length }],
+        };
         foreach (var texture in mesh.Textures)
         {
-            _meshTextures.Add(CreateTexture(texture.Width, texture.Height, texture.Bgra));
+            gpu.Textures.Add(CreateTexture(texture.Width, texture.Height, texture.Bgra));
         }
 
-        _parts = mesh.Parts.Length > 0
-            ? mesh.Parts
-            : [new MeshPart { StartIndex = 0, IndexCount = mesh.Indices.Length }];
+        _objects.Add(gpu);
+    }
+
+    /// <summary>显示 / 隐藏一个对象（不释放资源）。</summary>
+    public void SetVisible(int id, bool visible)
+    {
+        for (int i = 0; i < _objects.Count; i++)
+        {
+            if (_objects[i].Id == id)
+            {
+                _objects[i].Visible = visible;
+            }
+        }
+    }
+
+    /// <summary>释放一个对象的 GPU 资源。</summary>
+    public void RemoveMesh(int id)
+    {
+        for (int i = _objects.Count - 1; i >= 0; i--)
+        {
+            if (_objects[i].Id == id)
+            {
+                _objects[i].Dispose();
+                _objects.RemoveAt(i);
+            }
+        }
+    }
+
+    public void ClearMeshes()
+    {
+        foreach (var gpu in _objects)
+        {
+            gpu.Dispose();
+        }
+
+        _objects.Clear();
+    }
+
+    /// <summary>地面网格按整个场景的包围盒重建（对象增删后由视口调用）。</summary>
+    public void UpdateGrid(Vector3 sceneMin, Vector3 sceneMax) => BuildGrid(sceneMin, sceneMax);
+
+    /// <summary>兼容旧调用：清空场景只放这一个网格（id 0）。</summary>
+    public void SetMesh(MeshData mesh)
+    {
+        ClearMeshes();
+        AddMesh(0, mesh);
         BuildGrid(mesh.Min, mesh.Max);
     }
 
@@ -299,21 +347,15 @@ public sealed class SceneRenderer : IDisposable
 
     public bool ShowGrid { get; set; } = true;
 
-    public void Render(in OrbitCamera camera, in Vector3 scale, float meshRadius)
+    /// <summary>渲染和拾取共用同一套 view / projection（含正交），保证点到哪选到哪。</summary>
+    public static void GetViewProjection(in OrbitCamera camera, in Vector3 scale, float meshRadius, float aspect, out Matrix4x4 view, out Matrix4x4 projection)
     {
-        if (_colorView == null || _depthView == null)
-        {
-            return;
-        }
-
-        float aspect = _pixelWidth / (float)_pixelHeight;
         var eye = camera.Eye;
-        var view = Matrix4x4.CreateLookAt(eye, camera.Target, Vector3.UnitY);
+        view = Matrix4x4.CreateLookAt(eye, camera.Target, Vector3.UnitY);
         // 近 / 远平面跟着相机距离和模型大小走，深度精度够用，也不会把模型裁掉。
         float scaledRadius = meshRadius * MathF.Max(scale.X, MathF.Max(scale.Y, scale.Z));
         float near = MathF.Max(camera.Distance * 0.002f, (camera.Distance - scaledRadius * 4f) * 0.5f);
         float far = camera.Distance + scaledRadius * 20f + 1e-3f;
-        Matrix4x4 projection;
         if (camera.Orthographic)
         {
             float halfHeight = camera.OrthoHalfHeight;
@@ -323,6 +365,18 @@ public sealed class SceneRenderer : IDisposable
         {
             projection = Matrix4x4.CreatePerspectiveFieldOfView(camera.FieldOfView, aspect, near, far);
         }
+    }
+
+    public void Render(in OrbitCamera camera, in Vector3 scale, float meshRadius)
+    {
+        if (_colorView == null || _depthView == null)
+        {
+            return;
+        }
+
+        float aspect = _pixelWidth / (float)_pixelHeight;
+        var eye = camera.Eye;
+        GetViewProjection(camera, scale, meshRadius, aspect, out var view, out var projection);
 
         // 主光从相机右上方照过来：随视角转，任何角度看过去正面都是亮的。
         var forward = Vector3.Normalize(camera.Target - eye);
@@ -349,7 +403,7 @@ public sealed class SceneRenderer : IDisposable
         _offset[0] = 0;
         if (ShowGrid && _gridVertices != null)
         {
-            WriteConstants(Matrix4x4.Identity, viewProjection, light, unlit: true);
+            WriteConstants(Matrix4x4.Identity, viewProjection, light, unlit: true, highlight: false);
             _context.RSSetState(_doubleSidedRasterizer);
             _context.IASetPrimitiveTopology(PrimitiveTopology.LineList);
             _vertexSlot[0] = _gridVertices;
@@ -360,17 +414,27 @@ public sealed class SceneRenderer : IDisposable
             _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         }
 
-        if (_vertices != null && _indices != null && _indexCount > 0)
+        _samplerSlot[0] = _sampler;
+        _context.PSSetSamplers(0, 1, _samplerSlot);
+        var world = Matrix4x4.CreateScale(scale);
+        // for 循环 + 预分配的槽数组：渲染循环里不产生托管分配。
+        for (int o = 0; o < _objects.Count; o++)
         {
-            WriteConstants(Matrix4x4.CreateScale(scale), viewProjection, light, unlit: false);
-            _vertexSlot[0] = _vertices;
-            _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
-            _context.IASetIndexBuffer(_indices, Format.R32_UInt, 0);
-            _samplerSlot[0] = _sampler;
-            _context.PSSetSamplers(0, 1, _samplerSlot);
-            foreach (var part in _parts)
+            var gpu = _objects[o];
+            if (gpu.IndexCount <= 0 || !gpu.Visible)
             {
-                if (part.IndexCount <= 0 || part.StartIndex + part.IndexCount > _indexCount)
+                continue;
+            }
+
+            WriteConstants(world, viewProjection, light, unlit: false, highlight: gpu.Id == SelectedId);
+            _vertexSlot[0] = gpu.Vertices;
+            _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
+            _context.IASetIndexBuffer(gpu.Indices, Format.R32_UInt, 0);
+            var parts = gpu.Parts;
+            for (int p = 0; p < parts.Length; p++)
+            {
+                var part = parts[p];
+                if (part.IndexCount <= 0 || part.StartIndex + part.IndexCount > gpu.IndexCount)
                 {
                     continue;
                 }
@@ -378,8 +442,8 @@ public sealed class SceneRenderer : IDisposable
                 _context.RSSetState(part.DoubleSided
                     ? (Wireframe ? _doubleSidedWireRasterizer : _doubleSidedRasterizer)
                     : (Wireframe ? _wireRasterizer : _rasterizer));
-                _textureSlot[0] = part.TextureIndex >= 0 && part.TextureIndex < _meshTextures.Count
-                    ? _meshTextures[part.TextureIndex].View
+                _textureSlot[0] = part.TextureIndex >= 0 && part.TextureIndex < gpu.Textures.Count
+                    ? gpu.Textures[part.TextureIndex].View
                     : _whiteView;
                 _context.PSSetShaderResources(0, 1, _textureSlot);
                 _context.DrawIndexed((uint)part.IndexCount, (uint)part.StartIndex, 0);
@@ -390,7 +454,7 @@ public sealed class SceneRenderer : IDisposable
     }
 
     /// <summary>直接写进映射的常量缓冲，不经过 Marshal.StructureToPtr（它会装箱，每帧产生垃圾）。</summary>
-    unsafe void WriteConstants(in Matrix4x4 world, in Matrix4x4 viewProjection, Vector3 light, bool unlit)
+    unsafe void WriteConstants(in Matrix4x4 world, in Matrix4x4 viewProjection, Vector3 light, bool unlit, bool highlight)
     {
         Matrix4x4.Invert(world, out var inverseWorld);
         var mapped = _context.Map(_constants, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
@@ -401,6 +465,8 @@ public sealed class SceneRenderer : IDisposable
         constants->NormalWorld = Matrix4x4.Transpose(inverseWorld);
         constants->LightDirection = light;
         constants->Unlit = unlit ? 1f : 0f;
+        constants->Highlight = highlight ? 1f : 0f;
+        constants->Padding = Vector3.Zero;
         _context.Unmap(_constants, 0);
     }
 
@@ -437,8 +503,8 @@ public sealed class SceneRenderer : IDisposable
 
     public void Dispose()
     {
-        _vertices?.Dispose();
-        _indices?.Dispose();
+        ClearMeshes();
+        _gpuIdleQuery?.Dispose();
         _gridVertices?.Dispose();
         _colorView?.Dispose();
         _color?.Dispose();
@@ -453,12 +519,6 @@ public sealed class SceneRenderer : IDisposable
         _wireRasterizer.Dispose();
         _doubleSidedRasterizer.Dispose();
         _doubleSidedWireRasterizer.Dispose();
-        foreach (var (texture, view) in _meshTextures)
-        {
-            view.Dispose();
-            texture.Dispose();
-        }
-
         _whiteView.Dispose();
         _whiteTexture.Dispose();
         _sampler.Dispose();
@@ -563,5 +623,32 @@ public sealed class SceneRenderer : IDisposable
         public Matrix4x4 NormalWorld;
         public Vector3 LightDirection;
         public float Unlit;
+        public float Highlight;
+        public Vector3 Padding;
+    }
+
+    /// <summary>一个场景对象的 GPU 资源：顶点 / 索引缓冲 + 贴图。</summary>
+    sealed class GpuObject : IDisposable
+    {
+        public int Id;
+        public required ID3D11Buffer Vertices;
+        public required ID3D11Buffer Indices;
+        public int IndexCount;
+        public bool Visible = true;
+        public MeshPart[] Parts = [];
+        public readonly List<(ID3D11Texture2D Texture, ID3D11ShaderResourceView View)> Textures = [];
+
+        public void Dispose()
+        {
+            foreach (var (texture, view) in Textures)
+            {
+                view.Dispose();
+                texture.Dispose();
+            }
+
+            Textures.Clear();
+            Vertices.Dispose();
+            Indices.Dispose();
+        }
     }
 }
