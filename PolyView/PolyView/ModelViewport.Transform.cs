@@ -70,26 +70,26 @@ public sealed partial class ModelViewport
     {
         var grid = new Grid();
         grid.Children.Add(image);
-        var bar = new StackPanel
+        var bar = new StackPanel { Orientation = Orientation.Vertical };
+        var group = new Border
         {
-            Orientation = Orientation.Vertical,
+            Child = bar,
+            CornerRadius = new CornerRadius(6),
+            Background = Brushes.Transparent,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(6),
         };
-        // Segoe MDL2：选择、移动、旋转、缩放
-        string[] glyphs = ["\uE8B0", "\uE7C2", "\uE7AD", "\uE740"];
         for (int i = 0; i < 4; i++)
         {
             var tool = (TransformTool)i;
             var button = new ToggleButton
             {
-                Content = glyphs[i],
-                FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                FontSize = 16,
-                Width = 34,
-                Height = 34,
-                Margin = new Thickness(0, 0, 0, 4),
+                Template = ToolTemplate(i == 0 ? "6,6,0,0" : i == 3 ? "0,0,6,6" : "0"),
+                Content = ToolIcon(i),
+                Tag = i is 0 or 3 ? "variants" : null,
+                Width = 32,
+                Height = 32,
                 Focusable = false,
                 IsChecked = i == 0,
             };
@@ -97,12 +97,73 @@ public sealed partial class ModelViewport
             _toolButtons[i] = button;
             bar.Children.Add(button);
         }
-
-        grid.Children.Add(bar);
+        grid.Children.Add(group);
         grid.Children.Add(_modalText);
         grid.Children.Add(BuildNavGizmo());
         ApplyToolbarLanguage();
         return grid;
+    }
+
+    // ---------------- Blender 4.2 toolbar look ----------------
+
+    static ControlTemplate ToolTemplate(string corners)
+    {
+        var xaml = "<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' "
+            + "xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='ToggleButton'>"
+            + "<Grid><Border x:Name='Bd' Background='#CC2B2B2B' CornerRadius='" + corners + "'/>"
+            + "<ContentPresenter HorizontalAlignment='Center' VerticalAlignment='Center'/>"
+            + "<Path x:Name='Tri' Data='M5,0 L5,5 L0,5 Z' Fill='#FFB8B8B8' HorizontalAlignment='Right' VerticalAlignment='Bottom' Margin='0,0,3,3' Visibility='Collapsed'/></Grid>"
+            + "<ControlTemplate.Triggers>"
+            + "<Trigger Property='Tag' Value='variants'><Setter TargetName='Tri' Property='Visibility' Value='Visible'/></Trigger>"
+            + "<Trigger Property='IsMouseOver' Value='True'><Setter TargetName='Bd' Property='Background' Value='#FF3A3A3A'/></Trigger>"
+            + "<Trigger Property='IsChecked' Value='True'><Setter TargetName='Bd' Property='Background' Value='#FF4772B3'/>"
+            + "<Setter TargetName='Tri' Property='Fill' Value='#FFFFFFFF'/></Trigger>"
+            + "</ControlTemplate.Triggers></ControlTemplate>";
+        return (ControlTemplate)System.Windows.Markup.XamlReader.Parse(xaml);
+    }
+
+    static readonly Brush IconWhite = FreezeBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+
+    static Brush FreezeBrush(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>Vector tool icons on a 20x20 canvas, one shared stroke style (#E6E6E6, 1.5 px).</summary>
+    static UIElement ToolIcon(int tool)
+    {
+        (string stroke, string fill) = tool switch
+        {
+            // Select: cursor arrow
+            0 => ("M5,2.5 L5,16 L8.4,12.8 L10.8,18 L13,17 L10.6,11.9 L15.2,11.6 Z", ""),
+            // Move: 4-way arrows with a center dot
+            1 => ("M10,1.5 V7 M10,13 V18.5 M1.5,10 H7 M13,10 H18.5 M7.8,3.7 L10,1.5 L12.2,3.7 M7.8,16.3 L10,18.5 L12.2,16.3 M3.7,7.8 L1.5,10 L3.7,12.2 M16.3,7.8 L18.5,10 L16.3,12.2",
+                  "M10,8.3 A1.7,1.7 0 1 1 9.99,8.3 Z"),
+            // Rotate: two curved arrows around a small diamond
+            2 => ("M3.2,8 A7,7 0 0 1 15.5,4.8 M16.8,12 A7,7 0 0 1 4.5,15.2 M15.5,1.8 L15.5,4.8 L12.5,4.8 M4.5,18.2 L4.5,15.2 L7.5,15.2",
+                  "M10,7.6 L12.4,10 L10,12.4 L7.6,10 Z"),
+            // Scale: outer bracket corner, diagonal arrow, small filled inner square
+            _ => ("M2.5,9 V17.5 H11 M9,11 L17.5,2.5 M12,2.5 H17.5 V8",
+                  "M4.5,11.5 H8.5 V15.5 H4.5 Z"),
+        };
+        var canvas = new Grid { Width = 20, Height = 20 };
+        canvas.Children.Add(new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse(stroke),
+            Stroke = IconWhite,
+            StrokeThickness = 1.5,
+            StrokeLineJoin = PenLineJoin.Round,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+        });
+        if (fill.Length > 0)
+        {
+            canvas.Children.Add(new System.Windows.Shapes.Path { Data = Geometry.Parse(fill), Fill = IconWhite });
+        }
+
+        return canvas;
     }
 
     /// <summary>切换语言时刷新工具栏提示。</summary>
