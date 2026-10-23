@@ -53,4 +53,16 @@ public static class UiText
     public static string HintScale => Chinese
         ? "拖动轴端方块沿该轴缩放，拖中心等比缩放；右键或 Esc 取消。"
         : "Drag a box handle to scale along that axis, or drag the center to scale evenly. Right-click or Esc to cancel.";
-}
+
+    // Scene outliner
+    public static string OutlinerTitle => Chinese ? "场景列表" : "Outliner";
+    public static string OutlinerScene => Chinese ? "场景" : "Scene";
+    public static string KindMesh => Chinese ? "模型" : "Mesh";
+    public static string KindCamera => Chinese ? "相机" : "Camera";
+    public static string KindLight => Chinese ? "灯光" : "Light";
+    public static string KindEmpty => Chinese ? "空节点" : "Empty";
+    public static string PropTitle => Chinese ? "属性" : "Properties";
+    public static string PropVertices => Chinese ? "顶点" : "Vertices";
+    public static string PropTriangles => Chinese ? "三角形" : "Triangles";
+    public static string PropSize => Chinese ? "尺寸" : "Size";
+    public static string ToggleVisibility => Chinese ? "显示/隐藏" : "Show/Hide";}
