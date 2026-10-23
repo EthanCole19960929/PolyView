@@ -20,7 +20,7 @@ Built with C# / WPF and Direct3D 11, with built-in AI control over MCP
   <img src="https://img.shields.io/badge/license-TBD-lightgrey?style=flat-square" alt="License">
 </p>
 
-**English** | [Simplified Chinese](README.zh-CN.md)
+**English** | [简体中文](README.zh-CN.md)
 
 [Overview](#overview) ·
 [Features](#features) ·

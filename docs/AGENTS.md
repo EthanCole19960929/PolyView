@@ -134,6 +134,7 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 - 用户的需求交给 program，program 拆分并分派给各 bot；其他 bot 也可以写代码，但各自只负责分到的文件和功能块。
 - 每次开工先读 `docs/AGENTS.md` 、`docs/00_功能规划与进度.md`（总体规划和各模块状态）和 `docs/06_开发进度.md`。
 - **README.md 只能用英文写，不要在 README 里加中文。** README.md must be written in English only. Do not add Chinese text to README.（中文说明请放到 `README.zh-CN.md` 或 `docs\` 里。）
+  - Exception: the language-switcher label `简体中文` (link to `README.zh-CN.md`) is the only permitted Chinese text in README.md.
 
 ## Git 规则
 
