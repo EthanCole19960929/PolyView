@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         Outliner.Attach(Viewport);
         ApplyLanguage();
         InitProject();
+        InitMcp();
 
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
         // 性能测试：PolyView.exe --bench 模型路径 结果文件（追加一行制表符分隔的结果后自动退出）

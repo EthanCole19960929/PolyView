@@ -1,4 +1,4 @@
-namespace PolyView;
+﻿namespace PolyView;
 
 public static partial class UiText
 {
@@ -13,7 +13,7 @@ public static partial class UiText
         "Addons", "Themes", null,
         "AssetLibs", null,
         "Input", "Navigation", "Keymap", null,
-        "System", "SaveLoad", "FilePaths",
+        "System", "SaveLoad", "FilePaths", null, "AI",
     ];
 
     public static string PrefCategory(string key) => key switch
@@ -33,6 +33,7 @@ public static partial class UiText
         "System" => Chinese ? "系统" : "System",
         "SaveLoad" => Chinese ? "保存&加载" : "Save & Load",
         "FilePaths" => Chinese ? "文件路径" : "File Paths",
+        "AI" => "AI / MCP",
         _ => key,
     };
 
@@ -56,6 +57,7 @@ public static partial class UiText
         "System" => Chinese ? ["Direct3D 后端", "内存 & 限制", "声音"] : ["Direct3D Backend", "Memory & Limits", "Sound"],
         "SaveLoad" => Chinese ? ["保存", "工程文件", "自动保存"] : ["Saving", "Project Files", "Auto Save"],
         "FilePaths" => Chinese ? ["数据", "渲染", "应用程序"] : ["Data", "Render", "Applications"],
+        "AI" => Chinese ? ["MCP 服务", "AI 客户端"] : ["MCP Server", "AI Clients"],
         _ => [],
     };
 

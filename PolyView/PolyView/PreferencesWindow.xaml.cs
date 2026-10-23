@@ -81,6 +81,7 @@ public partial class PreferencesWindow : Window
                 else if (i == 1) { body = EditorsPanel(); expanded = true; }
                 else if (i == 2) { body = LanguagePanel(); expanded = true; }
             }
+            else if (_category == "AI") { body = i == 0 ? McpServerPanel() : McpClientsPanel(); expanded = true; }
             else if (_category == "SaveLoad" && i == 1) { body = FolderRow(); expanded = true; }
             SectionList.Children.Add(Panel(sections[i], body, expanded));
         }

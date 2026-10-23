@@ -1,0 +1,15 @@
+{
+  "_comment": "AI clients PolyView can auto-connect. Add a new AI by adding one entry. {url} = MCP URL. paths: env vars expanded; first existing (or whose folder exists) wins. transport http: entry used as-is; stdio: bridge via npx mcp-remote.",
+  "clients": [
+    { "id": "cursor", "name": "Cursor", "paths": ["%USERPROFILE%\\.cursor\\mcp.json"], "installDirs": ["%USERPROFILE%\\.cursor"], "format": "json", "key": "mcpServers", "processes": ["Cursor"], "entry": { "url": "{url}" } },
+    { "id": "claude-code", "name": "Claude Code", "paths": ["%USERPROFILE%\\.claude.json"], "installDirs": ["%USERPROFILE%\\.claude"], "format": "json", "key": "mcpServers", "processes": ["claude"], "entry": { "type": "http", "url": "{url}" } },
+    { "id": "claude-desktop", "name": "Claude Desktop", "paths": ["%APPDATA%\\Claude\\claude_desktop_config.json"], "installDirs": ["%APPDATA%\\Claude", "%LOCALAPPDATA%\\AnthropicClaude"], "format": "json", "key": "mcpServers", "processes": ["Claude"], "entry": { "command": "npx", "args": ["-y", "mcp-remote", "{url}"] } },
+    { "id": "vscode", "name": "VS Code (Copilot)", "paths": ["%APPDATA%\\Code\\User\\mcp.json"], "installDirs": ["%APPDATA%\\Code\\User"], "format": "json", "key": "servers", "processes": ["Code"], "entry": { "type": "http", "url": "{url}" } },
+    { "id": "windsurf", "name": "Windsurf", "paths": ["%USERPROFILE%\\.codeium\\windsurf\\mcp_config.json"], "installDirs": ["%USERPROFILE%\\.codeium\\windsurf"], "format": "json", "key": "mcpServers", "processes": ["Windsurf"], "entry": { "serverUrl": "{url}" } },
+    { "id": "trae", "name": "Trae", "paths": ["%APPDATA%\\Trae\\User\\mcp.json", "%APPDATA%\\Trae CN\\User\\mcp.json"], "installDirs": ["%APPDATA%\\Trae\\User", "%APPDATA%\\Trae CN\\User"], "format": "json", "key": "mcpServers", "processes": ["Trae", "Trae CN"], "entry": { "url": "{url}" } },
+    { "id": "cherry", "name": "Cherry Studio", "paths": [], "installDirs": ["%APPDATA%\\CherryStudio"], "format": "manual", "key": "", "processes": ["Cherry Studio", "CherryStudio"], "entry": { "type": "streamableHttp", "url": "{url}" } },
+    { "id": "doubao", "name": "豆包 Doubao", "paths": [], "installDirs": ["%LOCALAPPDATA%\\Doubao", "%APPDATA%\\Doubao"], "format": "manual", "key": "", "processes": ["Doubao"], "entry": { "url": "{url}" } },
+    { "id": "gemini-cli", "name": "Gemini CLI", "paths": ["%USERPROFILE%\\.gemini\\settings.json"], "installDirs": ["%USERPROFILE%\\.gemini"], "format": "json", "key": "mcpServers", "processes": ["gemini"], "entry": { "httpUrl": "{url}" } },
+    { "id": "codex", "name": "Codex CLI", "paths": ["%USERPROFILE%\\.codex\\config.toml"], "installDirs": ["%USERPROFILE%\\.codex"], "format": "toml", "key": "mcp_servers", "processes": ["codex"], "entry": { "command": "npx", "args": ["-y", "mcp-remote", "{url}"] } }
+  ]
+}

@@ -176,3 +176,29 @@ claude mcp add --transport http polyview http://127.0.0.1:47800/mcp --header "Au
 - **线程**：并发发送 50 个请求，确认按顺序执行、没有跨线程异常；导入时同时发送截图请求。
 - **安全**：错误令牌、其他用户访问管道、白名单外路径、未确认的破坏性操作，都必须被拒绝。
 - **端到端**：在 Claude Desktop 里用自然语言完成 P2 的验收任务，并截图存档。
+
+## 14. 第一阶段实现记录（2026-10-23）
+为了满足“零配置”的要求，第一阶段**先实现方案 A（进程内 Streamable HTTP）**。stdio 客户端统一通过 `npx -y mcp-remote <url>` 桥接；第 3 节中的命名管道桥接 exe 留到以后需要时再做。
+
+- 服务：`Mcp/McpServerHost.cs`，使用 `ModelContextProtocol.AspNetCore` + Kestrel，地址 `http://127.0.0.1:47800/mcp`，无状态模式，随软件启动（`AppSettings.McpEnabled`，默认开启）；会拒绝非本机来源的 `Origin` 请求。端口被占用时（例如开了第二个 PolyView）不启动，并在偏好设置里显示原因。
+- 工具：`Mcp/PolyViewTools.cs` → `MainWindow.Mcp.cs`，全部通过 `Dispatcher.InvokeAsync` 在 UI 线程执行。`set_transform` 和 `add_light` 复用现有撤销栈，可以 Ctrl+Z。`delete_object` 会弹出 `PvMessageDialog` 让用户确认。
+- 第一阶段还没做：令牌认证（目前只靠绑定本机和 Origin 校验）、调用日志、Resources。
+
+### 14.1 数据驱动的客户端注册表
+`Mcp/mcp-clients.json`：每个 AI 客户端是一条描述，新增一个 AI 只需要加一条：
+```json
+{ "id": "cursor", "name": "Cursor", "paths": ["%USERPROFILE%\\.cursor\\mcp.json"], "installDirs": ["%USERPROFILE%\\.cursor"],
+  "format": "json", "key": "mcpServers", "processes": ["Cursor"], "entry": { "url": "{url}" } }
+```
+- `format`：`json`（合并 JSON）、`toml`（Codex 的 `[mcp_servers.polyview]`）或 `manual`（只能复制配置）。
+- `entry` 里的 `{url}` 会替换成服务地址；stdio 客户端用 `{"command":"npx","args":["-y","mcp-remote","{url}"]}`。
+- 检测方式：`paths`/`installDirs` 存在就算“已安装”；`processes` 中的进程在运行就算“运行中”；配置里已经有 `polyview` 条目就算“已连接”。
+- 合并时只增加或更新 `polyview` 一项，绝不删除其他条目；第一次修改前写 `<file>.polyview.bak`；先写临时文件再替换，避免写坏。
+- 启动时后台检查已连接的客户端，条目内容不对就静默修正。
+- 内置条目：Cursor、Claude Code（`~/.claude.json`）、Claude Desktop（mcp-remote）、VS Code（`servers` 键）、Windsurf（`serverUrl`）、Trae / Trae CN（`%APPDATA%\Trae\User\mcp.json`，**路径未经验证**）、Gemini CLI（`httpUrl`）、Codex CLI（toml）。Cherry Studio 和豆包的配置存在应用内部，路径不公开，所以标为 `manual`，用户需要用「复制 HTTP 配置 / 复制 stdio 配置」手动粘贴。
+- 偏好设置「AI / MCP」页的内容：服务开关、运行状态、地址、两个“复制配置”按钮；客户端列表（勾选框，以及已安装/运行中/已连接三列）、「扫描」、「一键连接 AI（连接所选）」、「断开」按钮。对正在运行的客户端会提示“请重启以生效”。
+
+### 14.2 手动配置
+- Cursor `~/.cursor/mcp.json`：`{"mcpServers":{"polyview":{"url":"http://127.0.0.1:47800/mcp"}}}`
+- Claude Code：`claude mcp add --transport http polyview http://127.0.0.1:47800/mcp`
+- Claude Desktop：`{"mcpServers":{"polyview":{"command":"npx","args":["-y","mcp-remote","http://127.0.0.1:47800/mcp"]}}}`（需要安装 Node.js）

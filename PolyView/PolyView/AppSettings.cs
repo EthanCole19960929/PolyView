@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 
 namespace PolyView;
@@ -7,6 +7,9 @@ namespace PolyView;
 public sealed class AppSettings
 {
     public string Language { get; set; } = "zh";
+
+    /// <summary>Start the built-in MCP server (http://127.0.0.1:47800/mcp) with the app.</summary>
+    public bool McpEnabled { get; set; } = true;
 
     public static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PolyView", "settings.json");
