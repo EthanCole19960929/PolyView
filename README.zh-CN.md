@@ -124,8 +124,12 @@ dotnet run --project PolyView/PolyView.csproj
 ├── PolyView/
 │   ├── PolyView.slnx        # 用 Visual Studio 2026 打开
 │   └── PolyView/            # WPF 主程序项目
-├── samples/                 # 测试模型（glTF / GLB / OBJ / STL）
-└── docs/                    # 设计说明与开发计划
+├── Models/                  # 测试模型（平铺一层，来源见 Models/SOURCE.txt）
+└── docs/                    # 所有文档，按编号排序，索引见 docs/AGENTS.md
+    ├── AGENTS.md            # 接手说明与文档索引
+    ├── 01_开发计划说明.md
+    ├── 02_动作资源网站.md
+    └── 03_3D显示原理与优化.md
 ```
 
 ## 🧩 测试模型

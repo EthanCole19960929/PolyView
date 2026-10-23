@@ -125,8 +125,12 @@ Or open `PolyView/PolyView.slnx` in Visual Studio and press **F5**.
 ├── PolyView/
 │   ├── PolyView.slnx        # Open this in Visual Studio 2026
 │   └── PolyView/            # WPF application project
-├── samples/                 # Test models (glTF / GLB / OBJ / STL)
-└── docs/                    # Design notes and development plan
+├── Models/                  # Test models (flat; sources in Models/SOURCE.txt)
+└── docs/                    # All docs, numbered; index in docs/AGENTS.md
+    ├── AGENTS.md            # Hand-over notes and doc index
+    ├── 01_开发计划说明.md     # Development plan (Chinese)
+    ├── 02_动作资源网站.md     # Animation resource sites (Chinese)
+    └── 03_3D显示原理与优化.md  # 3D display principles & optimization draft (Chinese)
 ```
 
 ## 🧩 Sample Models
