@@ -11,6 +11,7 @@
     { "id": "doubao", "name": "豆包 Doubao", "paths": [], "installDirs": ["%LOCALAPPDATA%\\Doubao", "%APPDATA%\\Doubao"], "format": "manual", "key": "", "processes": ["Doubao"], "entry": { "url": "{url}" } },
     { "id": "gemini-cli", "name": "Gemini CLI", "paths": ["%USERPROFILE%\\.gemini\\settings.json"], "installDirs": ["%USERPROFILE%\\.gemini"], "format": "json", "key": "mcpServers", "processes": ["gemini"], "entry": { "httpUrl": "{url}" } },
     { "id": "codex", "name": "Codex CLI", "paths": ["%USERPROFILE%\\.codex\\config.toml"], "installDirs": ["%USERPROFILE%\\.codex"], "format": "toml", "key": "mcp_servers", "processes": ["codex"], "entry": { "command": "npx", "args": ["-y", "mcp-remote", "{url}"] } },
+    { "id": "deepseek-harness", "name": "DeepSeek Harness", "paths": [], "installDirs": ["C:\\Software\\DeepSeekHarness", "%USERPROFILE%\\.dsh", "%APPDATA%\\@deepseek-ai\\dsh-desktop"], "format": "manual", "key": "", "processes": ["DeepSeek Harness"], "entry": { "type": "http", "url": "{url}" } },
     { "id": "deepseek", "name": "DeepSeek (\u7ecf Cherry Studio / Chatbox)", "paths": [], "installDirs": ["%LOCALAPPDATA%\\Programs\\DeepSeek", "%APPDATA%\\DeepSeek"], "format": "manual", "key": "", "processes": ["DeepSeek"], "entry": { "url": "{url}" } },
     { "id": "chatbox", "name": "Chatbox", "paths": [], "installDirs": ["%APPDATA%\\xyz.chatboxapp.app", "%LOCALAPPDATA%\\Programs\\chatbox"], "format": "manual", "key": "", "processes": ["Chatbox"], "entry": { "url": "{url}" } }
   ]
