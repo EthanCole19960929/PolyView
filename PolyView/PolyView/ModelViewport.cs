@@ -34,6 +34,7 @@ public sealed partial class ModelViewport : UserControl
     int _loadVersion;
     bool _resizePending = true;
     bool _dirty = true;
+    int _warmupFrames = 3;
     bool _renderingHooked;
     string? _failure;
     BenchState? _bench;
@@ -103,24 +104,28 @@ public sealed partial class ModelViewport : UserControl
         Background = new SolidColorBrush(Color.FromRgb(28, 31, 36));
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
-        SizeChanged += (_, _) =>
-        {
-            _resizePending = true;
-            Invalidate();
-        };
+        SizeChanged += (_, _) => RequestFreshFrames();
+        IsVisibleChanged += (_, _) => RequestFreshFrames();
         _d3dImage.IsFrontBufferAvailableChanged += (_, _) =>
         {
             // 锁屏、远程桌面切换等会丢掉前缓冲；恢复后重建共享表面并重画，避免黑屏。
             if (_d3dImage.IsFrontBufferAvailable)
             {
-                _resizePending = true;
-                Invalidate();
+                RequestFreshFrames();
             }
         };
     }
 
     /// <summary>请求下一帧重画。画面没变化时不渲染，CPU / GPU 空闲。</summary>
     public void Invalidate() => _dirty = true;
+
+    /// <summary>Back buffer changed (init / resize / DPI / device restore): redraw a few frames so the first one is surely presented.</summary>
+    void RequestFreshFrames()
+    {
+        _resizePending = true;
+        _warmupFrames = 3;
+        _dirty = true;
+    }
 
     public void ShowSample()
     {
@@ -510,6 +515,12 @@ public sealed partial class ModelViewport : UserControl
         ViewChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        RequestFreshFrames();
+    }
+
     void OnLoaded(object sender, RoutedEventArgs e)
     {
         try
@@ -545,7 +556,7 @@ public sealed partial class ModelViewport : UserControl
                 _renderingHooked = true;
             }
 
-            Invalidate();
+            RequestFreshFrames();
         }
         catch (Exception ex)
         {
@@ -597,12 +608,27 @@ public sealed partial class ModelViewport : UserControl
             _dirty = true;
         }
 
+        if (_warmupFrames > 0)
+        {
+            _dirty = true;
+        }
+
         if (!_dirty || _renderer == null || _device9 == null || !_d3dImage.IsFrontBufferAvailable)
         {
             return;
         }
 
-        if (_resizePending || _d3dImage.PixelWidth == 0)
+        if (ActualWidth < 1 || ActualHeight < 1)
+        {
+            // Not laid out yet: keep the request alive and retry once we have a real size.
+            _resizePending = true;
+            return;
+        }
+
+        var dpiNow = VisualTreeHelper.GetDpi(this);
+        int wantW = Math.Max(1, (int)Math.Round(ActualWidth * dpiNow.DpiScaleX));
+        int wantH = Math.Max(1, (int)Math.Round(ActualHeight * dpiNow.DpiScaleY));
+        if (_resizePending || _d3dImage.PixelWidth != wantW || _d3dImage.PixelHeight != wantH)
         {
             ResizeSurface();
             _resizePending = false;
@@ -614,6 +640,11 @@ public sealed partial class ModelViewport : UserControl
         }
 
         _dirty = false;
+        if (_warmupFrames > 0)
+        {
+            _warmupFrames--;
+        }
+
         RenderFrame();
         _d3dImage.Lock();
         _d3dImage.AddDirtyRect(new Int32Rect(0, 0, _d3dImage.PixelWidth, _d3dImage.PixelHeight));
