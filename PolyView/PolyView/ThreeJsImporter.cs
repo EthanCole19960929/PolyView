@@ -101,7 +101,7 @@ public static class ThreeJsImporter
 
             if (root.TryGetProperty("object", out var obj))
             {
-                Walk(context, obj, Matrix4x4.Identity);
+                Walk(context, obj, Matrix4x4.Identity, -1);
             }
             else
             {
@@ -110,6 +110,11 @@ public static class ThreeJsImporter
             }
 
             var mesh = MeshImporter.Finish(Path.GetFileNameWithoutExtension(path), context.Vertices, context.Indices, context.Parts, []);
+            if (context.Nodes.Count > 0)
+            {
+                mesh.Nodes = SceneNode.Link(context.Nodes);
+            }
+
             if (context.Skipped.Count == 0)
             {
                 return mesh;
@@ -126,6 +131,7 @@ public static class ThreeJsImporter
                 Parts = mesh.Parts,
                 Textures = mesh.Textures,
                 Notice = $"已跳过不支持的几何体：{skipped}",
+                Nodes = mesh.Nodes,
             };
         }
     }
@@ -138,9 +144,10 @@ public static class ThreeJsImporter
         public readonly List<uint> Indices = [];
         public readonly List<MeshPart> Parts = [];
         public readonly List<string> Skipped = [];
+        public readonly List<SceneNode> Nodes = [];
     }
 
-    static void Walk(Context context, JsonElement node, Matrix4x4 parentWorld)
+    static void Walk(Context context, JsonElement node, Matrix4x4 parentWorld, int parentSlot)
     {
         var local = Matrix4x4.Identity;
         if (node.TryGetProperty("matrix", out var matrix) && matrix.ValueKind == JsonValueKind.Array && matrix.GetArrayLength() == 16)
@@ -163,9 +170,10 @@ public static class ThreeJsImporter
             return;
         }
 
+        string type = node.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
+        int firstPart = context.Parts.Count;
         if (node.TryGetProperty("geometry", out var geometryId) && geometryId.ValueKind == JsonValueKind.String)
         {
-            string type = node.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
             if (type is "Mesh" or "SkinnedMesh" or "InstancedMesh")
             {
                 var (color, doubleSided) = ReadMaterial(context, node);
@@ -180,13 +188,84 @@ public static class ThreeJsImporter
             }
         }
 
+        int slot = context.Nodes.Count;
+        string name = node.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() ?? "" : "";
+        context.Nodes.Add(new SceneNode
+        {
+            Index = slot,
+            Name = name != "" ? name : type != "" ? type : $"Node {slot}",
+            Parent = parentSlot,
+            Kind = context.Parts.Count > firstPart ? SceneNodeKind.Mesh
+                : type.EndsWith("Camera", StringComparison.Ordinal) ? SceneNodeKind.Camera
+                : type.EndsWith("Light", StringComparison.Ordinal) ? SceneNodeKind.Light
+                : SceneNodeKind.Empty,
+            Local = local,
+            World = world,
+            PartIndices = Enumerable.Range(firstPart, context.Parts.Count - firstPart).ToArray(),
+            Camera = ReadCamera(node, type),
+            Light = ReadLight(node, type),
+        });
+
         if (node.TryGetProperty("children", out var children) && children.ValueKind == JsonValueKind.Array)
         {
             foreach (var child in children.EnumerateArray())
             {
-                Walk(context, child, world);
+                Walk(context, child, world, slot);
             }
         }
+    }
+
+    static SceneCamera? ReadCamera(JsonElement node, string type) => type switch
+    {
+        "PerspectiveCamera" => new SceneCamera
+        {
+            YFov = Num(node, "fov", 50) * MathF.PI / 180f,
+            AspectRatio = Num(node, "aspect", 1),
+            Near = Num(node, "near", 0.1f),
+            Far = Num(node, "far", 2000),
+        },
+        "OrthographicCamera" => new SceneCamera
+        {
+            Orthographic = true,
+            OrthoHalfHeight = (Num(node, "top", 1) - Num(node, "bottom", -1)) * 0.5f,
+            Near = Num(node, "near", 0.1f),
+            Far = Num(node, "far", 2000),
+        },
+        _ => null,
+    };
+
+    static SceneLight? ReadLight(JsonElement node, string type)
+    {
+        var kind = type switch
+        {
+            "DirectionalLight" => SceneLightType.Directional,
+            "PointLight" => SceneLightType.Point,
+            "SpotLight" => SceneLightType.Spot,
+            "AmbientLight" or "HemisphereLight" => SceneLightType.Ambient,
+            "RectAreaLight" => SceneLightType.Area,
+            _ => SceneLightType.Unknown,
+        };
+        if (kind == SceneLightType.Unknown)
+        {
+            return null;
+        }
+
+        var color = Vector3.One;
+        if (node.TryGetProperty("color", out var c) && c.ValueKind == JsonValueKind.Number)
+        {
+            int rgb = c.GetInt32();
+            color = new Vector3(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
+        }
+
+        return new SceneLight
+        {
+            Type = kind,
+            Color = color,
+            Intensity = Num(node, "intensity", 1),
+            Range = Num(node, "distance", 0),
+            OuterConeAngle = kind == SceneLightType.Spot ? Num(node, "angle", MathF.PI / 3) : 0,
+            InnerConeAngle = kind == SceneLightType.Spot ? Num(node, "angle", MathF.PI / 3) * (1 - Num(node, "penumbra", 0)) : 0,
+        };
     }
 
     static (Vector4 Color, bool DoubleSided) ReadMaterial(Context context, JsonElement node)
