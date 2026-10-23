@@ -62,9 +62,28 @@ public static unsafe class AssimpImporter
         }
 
         var lights = new Dictionary<string, nint>();
+        SceneWorld? sceneWorld = null;
+        var notices = new List<string>();
         for (uint i = 0; i < scene->MNumLights; i++)
         {
-            lights.TryAdd(scene->MLights[i]->MName.AsString, (nint)scene->MLights[i]);
+            var source = scene->MLights[i];
+            if (source->MType == LightSourceType.Ambient)
+            {
+                // Blender 没有环境光灯：颜色相加，合并进 World（docs/07 §2.2）。
+                var add = source->MColorAmbient.LengthSquared() > 0 ? source->MColorAmbient : source->MColorDiffuse;
+                var sum = (sceneWorld == null ? Vector3.Zero : sceneWorld.Color * sceneWorld.Strength) + add;
+                var (color, strength) = SplitColor(sum);
+                sceneWorld = new SceneWorld { Color = color, Strength = strength, FromFile = true };
+                continue;
+            }
+
+            if (source->MType == LightSourceType.Undefined)
+            {
+                notices.Add($"跳过未知类型的灯光 {source->MName.AsString}");
+                continue;
+            }
+
+            lights.TryAdd(source->MName.AsString, (nint)source);
         }
 
         var nodes = new List<SceneNode>();
@@ -112,6 +131,20 @@ public static unsafe class AssimpImporter
 
         var result = MeshImporter.Finish(Path.GetFileNameWithoutExtension(path), vertices, indices, parts, textures);
         result.Nodes = SceneNode.Link(nodes);
+        if (sceneWorld != null)
+        {
+            result.World = sceneWorld;
+        }
+
+        if (lights.Count > 0)
+        {
+            notices.Add("灯光强度已估算（Assimp 没有物理单位）");
+        }
+
+        if (notices.Count > 0)
+        {
+            result.Notice = string.Join("；", notices);
+        }
         return result;
     }
 
@@ -201,26 +234,43 @@ public static unsafe class AssimpImporter
         };
     }
 
+    /// <summary>Assimp 把亮度乘进了颜色：拆成归一化颜色 + 亮度（单位随文件格式，按 W / W/m² 原样使用）。</summary>
+    static (Vector3 Color, float Intensity) SplitColor(Vector3 color)
+    {
+        float intensity = MathF.Max(color.X, MathF.Max(color.Y, color.Z));
+        return (intensity > 0 ? color / intensity : Vector3.One, intensity);
+    }
+
+    /// <summary>Assimp 强度（颜色最大分量）到 Blender 单位的经验系数：1.0 视为 Blender 默认的 1000 W 点光 / 1 W/m² 日光。</summary>
+    const float AssimpPowerScale = 1000f;
+
     static SceneLight ReadLight(Light* light)
     {
-        // Assimp 把亮度乘进了颜色，这里拆成归一化颜色 + 亮度。
-        var color = light->MColorDiffuse;
-        float intensity = MathF.Max(color.X, MathF.Max(color.Y, color.Z));
+        var (color, intensity) = SplitColor(light->MColorDiffuse);
+        var type = light->MType switch
+        {
+            LightSourceType.Directional => SceneLightType.Directional,
+            LightSourceType.Point => SceneLightType.Point,
+            LightSourceType.Spot => SceneLightType.Spot,
+            LightSourceType.Area => SceneLightType.Area,
+            _ => SceneLightType.Unknown,
+        };
+        // docs/07 §2.2：mAngleInnerCone / mAngleOuterCone 按半角处理。
+        float outer = light->MAngleOuterCone > 0 ? light->MAngleOuterCone : SceneLight.DefaultSpotSize / 2;
+        float inner = Math.Min(light->MAngleInnerCone, outer);
+        bool spot = type == SceneLightType.Spot;
         return new SceneLight
         {
-            Type = light->MType switch
-            {
-                LightSourceType.Directional => SceneLightType.Directional,
-                LightSourceType.Point => SceneLightType.Point,
-                LightSourceType.Spot => SceneLightType.Spot,
-                LightSourceType.Ambient => SceneLightType.Ambient,
-                LightSourceType.Area => SceneLightType.Area,
-                _ => SceneLightType.Unknown,
-            },
-            Color = intensity > 0 ? color / intensity : Vector3.One,
+            Type = type,
+            Color = color,
             Intensity = intensity,
-            InnerConeAngle = light->MAngleInnerCone * 0.5f,
-            OuterConeAngle = light->MAngleOuterCone * 0.5f,
+            Power = type == SceneLightType.Directional ? intensity * SceneLight.DefaultSunStrength : intensity * AssimpPowerScale,
+            Radius = type is SceneLightType.Point or SceneLightType.Spot ? SceneLight.DefaultRadius : 0,
+            InnerConeAngle = spot ? inner : 0,
+            OuterConeAngle = spot ? outer : 0,
+            SpotBlend = spot && outer > 0 ? Math.Clamp(1f - inner / outer, 0f, 1f) : 0,
+            Shape = AreaShape.Rectangle,
+            Size = type == SceneLightType.Area ? light->MSize : Vector2.Zero,
         };
     }
 

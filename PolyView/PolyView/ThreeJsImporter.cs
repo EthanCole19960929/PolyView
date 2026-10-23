@@ -115,6 +115,11 @@ public static class ThreeJsImporter
                 mesh.Nodes = SceneNode.Link(context.Nodes);
             }
 
+            if (context.World != null)
+            {
+                mesh.World = context.World;
+            }
+
             if (context.Skipped.Count == 0)
             {
                 return mesh;
@@ -132,6 +137,7 @@ public static class ThreeJsImporter
                 Textures = mesh.Textures,
                 Notice = $"已跳过不支持的几何体：{skipped}",
                 Nodes = mesh.Nodes,
+                World = mesh.World,
             };
         }
     }
@@ -145,6 +151,7 @@ public static class ThreeJsImporter
         public readonly List<MeshPart> Parts = [];
         public readonly List<string> Skipped = [];
         public readonly List<SceneNode> Nodes = [];
+        public SceneWorld? World;
     }
 
     static void Walk(Context context, JsonElement node, Matrix4x4 parentWorld, int parentSlot)
@@ -188,6 +195,11 @@ public static class ThreeJsImporter
             }
         }
 
+        if (type is "AmbientLight" or "HemisphereLight")
+        {
+            context.World = new SceneWorld { Color = ReadColor(node), Strength = Num(node, "intensity", 1), FromFile = true };
+        }
+
         int slot = context.Nodes.Count;
         string name = node.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() ?? "" : "";
         context.Nodes.Add(new SceneNode
@@ -197,7 +209,7 @@ public static class ThreeJsImporter
             Parent = parentSlot,
             Kind = context.Parts.Count > firstPart ? SceneNodeKind.Mesh
                 : type.EndsWith("Camera", StringComparison.Ordinal) ? SceneNodeKind.Camera
-                : type.EndsWith("Light", StringComparison.Ordinal) ? SceneNodeKind.Light
+                : type is "DirectionalLight" or "PointLight" or "SpotLight" or "RectAreaLight" ? SceneNodeKind.Light
                 : SceneNodeKind.Empty,
             Local = local,
             World = world,
@@ -234,38 +246,58 @@ public static class ThreeJsImporter
         _ => null,
     };
 
-    static SceneLight? ReadLight(JsonElement node, string type)
+    static Vector3 ReadColor(JsonElement node)
     {
-        var kind = type switch
-        {
-            "DirectionalLight" => SceneLightType.Directional,
-            "PointLight" => SceneLightType.Point,
-            "SpotLight" => SceneLightType.Spot,
-            "AmbientLight" or "HemisphereLight" => SceneLightType.Ambient,
-            "RectAreaLight" => SceneLightType.Area,
-            _ => SceneLightType.Unknown,
-        };
-        if (kind == SceneLightType.Unknown)
-        {
-            return null;
-        }
-
-        var color = Vector3.One;
         if (node.TryGetProperty("color", out var c) && c.ValueKind == JsonValueKind.Number)
         {
             int rgb = c.GetInt32();
-            color = new Vector3(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
+            return new Vector3(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
         }
 
-        return new SceneLight
+        return Vector3.One;
+    }
+
+    /// <summary>three.js r155 以后按物理单位：点光 / 聚光为 cd，平行光为 lux，面光为 nit；按 Blender glTF 导入器的系数换成 W、W/m²。</summary>
+    static SceneLight? ReadLight(JsonElement node, string type)
+    {
+        float intensity = Num(node, "intensity", 1);
+        var color = ReadColor(node);
+        switch (type)
         {
-            Type = kind,
-            Color = color,
-            Intensity = Num(node, "intensity", 1),
-            Range = Num(node, "distance", 0),
-            OuterConeAngle = kind == SceneLightType.Spot ? Num(node, "angle", MathF.PI / 3) : 0,
-            InnerConeAngle = kind == SceneLightType.Spot ? Num(node, "angle", MathF.PI / 3) * (1 - Num(node, "penumbra", 0)) : 0,
-        };
+            case "DirectionalLight":
+                return new SceneLight { Type = SceneLightType.Directional, Color = color, Intensity = intensity, Power = SceneLight.LuxToWattsPerSquareMeter(intensity) };
+            case "PointLight":
+                return new SceneLight { Type = SceneLightType.Point, Color = color, Intensity = intensity, Power = SceneLight.CandelaToWatts(intensity), Range = Num(node, "distance", 0), Radius = SceneLight.DefaultRadius };
+            case "SpotLight":
+                float outer = Num(node, "angle", MathF.PI / 3);
+                float blend = Math.Clamp(Num(node, "penumbra", 0), 0, 1);
+                return new SceneLight
+                {
+                    Type = SceneLightType.Spot,
+                    Color = color,
+                    Intensity = intensity,
+                    Power = SceneLight.CandelaToWatts(intensity),
+                    Range = Num(node, "distance", 0),
+                    Radius = SceneLight.DefaultRadius,
+                    OuterConeAngle = outer,
+                    InnerConeAngle = outer * (1 - blend),
+                    SpotBlend = blend,
+                };
+            case "RectAreaLight":
+                float w = Num(node, "width", 10), h = Num(node, "height", 10);
+                return new SceneLight
+                {
+                    Type = SceneLightType.Area,
+                    Color = color,
+                    Intensity = intensity,
+                    // nit（cd/m²）× 面积 × π → lm，再除以 683。
+                    Power = intensity * w * h * MathF.PI / SceneLight.WattsToLumens,
+                    Shape = AreaShape.Rectangle,
+                    Size = new Vector2(w, h),
+                };
+            default:
+                return null;
+        }
     }
 
     static (Vector4 Color, bool DoubleSided) ReadMaterial(Context context, JsonElement node)

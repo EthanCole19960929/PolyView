@@ -1,5 +1,6 @@
 using System.IO;
 using System.Numerics;
+using System.Text.Json.Nodes;
 using SharpGLTF.Schema2;
 
 namespace PolyView;
@@ -59,7 +60,7 @@ public static class GltfImporter
             }
 
             var camera = ReadCamera(node.Camera);
-            var light = ReadLight(node.PunctualLight);
+            var light = ReadLight(node);
             sceneNodes.Add(new SceneNode
             {
                 Index = slot,
@@ -97,6 +98,7 @@ public static class GltfImporter
             Parts = parts.ToArray(),
             Textures = textures.ToArray(),
             Nodes = SceneNode.Link(sceneNodes),
+            World = ReadWorld(model.DefaultScene),
         };
     }
 
@@ -154,28 +156,145 @@ public static class GltfImporter
         };
     }
 
-    static SceneLight? ReadLight(PunctualLight? light)
+    /// <summary>
+    /// KHR_lights_punctual 只有点光 / 平行光 / 聚光。面光按 docs/07 §6 写在节点 extras 里：
+    /// "polyview_light": {"type":"area","shape":"rectangle","size":[2,1],"power":100,"color":[r,g,b]}；
+    /// 点光 / 聚光也可在 polyview_light 里给 "radius"。
+    /// </summary>
+    static SceneLight? ReadLight(Node node)
     {
+        var extra = (node.Extras as JsonObject)?["polyview_light"] as JsonObject;
+        var light = node.PunctualLight;
         if (light == null)
         {
-            return null;
+            if (!string.Equals(Str(extra, "type"), "area", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var shape = (Str(extra, "shape") ?? "square").ToLowerInvariant() switch
+            {
+                "rectangle" => AreaShape.Rectangle,
+                "disk" => AreaShape.Disk,
+                "ellipse" => AreaShape.Ellipse,
+                _ => AreaShape.Square,
+            };
+            var size = Vec2(extra, "size", Vector2.One);
+            if (shape is AreaShape.Square or AreaShape.Disk)
+            {
+                size = new Vector2(size.X, size.X);
+            }
+
+            float power = Num(extra, "power", SceneLight.DefaultPointPower);
+            return new SceneLight
+            {
+                Type = SceneLightType.Area,
+                Color = Vec3(extra, "color", Vector3.One),
+                Intensity = power,
+                Power = power,
+                Shape = shape,
+                Size = size,
+            };
         }
 
-        return new SceneLight
+        float range = float.IsFinite(light.Range) ? light.Range : 0;
+        float radius = Num(extra, "radius", SceneLight.DefaultRadius);
+        switch (light.LightType)
         {
-            Type = light.LightType switch
-            {
-                PunctualLightType.Directional => SceneLightType.Directional,
-                PunctualLightType.Point => SceneLightType.Point,
-                PunctualLightType.Spot => SceneLightType.Spot,
-                _ => SceneLightType.Unknown,
-            },
-            Color = light.Color,
-            Intensity = light.Intensity,
-            Range = light.Range,
-            InnerConeAngle = light.LightType == PunctualLightType.Spot ? light.InnerConeAngle : 0,
-            OuterConeAngle = light.LightType == PunctualLightType.Spot ? light.OuterConeAngle : 0,
+            case PunctualLightType.Directional:
+                return new SceneLight
+                {
+                    Type = SceneLightType.Directional,
+                    Color = light.Color,
+                    Intensity = light.Intensity,
+                    Power = SceneLight.LuxToWattsPerSquareMeter(light.Intensity),
+                };
+            case PunctualLightType.Spot:
+                float outer = light.OuterConeAngle;
+                return new SceneLight
+                {
+                    Type = SceneLightType.Spot,
+                    Color = light.Color,
+                    Intensity = light.Intensity,
+                    Power = SceneLight.CandelaToWatts(light.Intensity),
+                    Range = range,
+                    Radius = radius,
+                    InnerConeAngle = light.InnerConeAngle,
+                    OuterConeAngle = outer,
+                    SpotBlend = outer > 0 ? Math.Clamp(1f - light.InnerConeAngle / outer, 0f, 1f) : 0f,
+                };
+            default:
+                return new SceneLight
+                {
+                    Type = light.LightType == PunctualLightType.Point ? SceneLightType.Point : SceneLightType.Unknown,
+                    Color = light.Color,
+                    Intensity = light.Intensity,
+                    Power = SceneLight.CandelaToWatts(light.Intensity),
+                    Range = range,
+                    Radius = radius,
+                };
+        }
+    }
+
+    /// <summary>场景 extras："polyview_world": {"color":[r,g,b],"strength":1}。</summary>
+    static SceneWorld ReadWorld(Scene? scene)
+    {
+        if ((scene?.Extras as JsonObject)?["polyview_world"] is not JsonObject world)
+        {
+            return new SceneWorld();
+        }
+
+        return new SceneWorld
+        {
+            Color = Vec3(world, "color", new Vector3(0.05f)),
+            Strength = Num(world, "strength", 1f),
+            FromFile = true,
         };
+    }
+
+    static Vector2 Vec2(JsonObject? o, string key, Vector2 fallback)
+    {
+        if (o == null || !o.TryGetPropertyValue(key, out var v))
+        {
+            return fallback;
+        }
+
+        if (v is JsonValue single && single.TryGetValue<double>(out var d))
+        {
+            return new Vector2((float)d);
+        }
+
+        if (v is JsonArray a && a.Count >= 2)
+        {
+            float At(int i) => a[i] is JsonValue jv && jv.TryGetValue<double>(out var x) ? (float)x : 0f;
+            return new Vector2(At(0), At(1));
+        }
+
+        return fallback;
+    }
+
+    static string? Str(JsonObject? o, string key)
+        => o != null && o.TryGetPropertyValue(key, out var v) && v is JsonValue jv && jv.TryGetValue<string>(out var s) ? s : null;
+
+    static float Num(JsonObject? o, string key, float fallback)
+    {
+        if (o == null || !o.TryGetPropertyValue(key, out var v) || v is not JsonValue jv)
+        {
+            return fallback;
+        }
+
+        return jv.TryGetValue<double>(out var d) ? (float)d : fallback;
+    }
+
+    static Vector3 Vec3(JsonObject? o, string key, Vector3 fallback)
+    {
+        if (o == null || !o.TryGetPropertyValue(key, out var v) || v is not JsonArray a || a.Count < 3)
+        {
+            return fallback;
+        }
+
+        float At(int i) => a[i] is JsonValue jv && jv.TryGetValue<double>(out var d) ? (float)d : 0f;
+        return new Vector3(At(0), At(1), At(2));
     }
 
     static IEnumerable<Node> Flatten(IEnumerable<Node> nodes)

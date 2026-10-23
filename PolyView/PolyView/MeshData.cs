@@ -62,7 +62,7 @@ public sealed class MeshData
     public MeshTexture[] Textures { get; init; } = [];
 
     /// <summary>导入时的提示（例如跳过了哪些内容），显示在状态栏；空字符串表示没有。</summary>
-    public string Notice { get; init; } = "";
+    public string Notice { get; internal set; } = "";
 
     public int TriangleCount => Indices.Length / 3;
 
@@ -72,6 +72,9 @@ public sealed class MeshData
     /// 导入器没有填时由 MeshImporter.Load 补一个包含全部 Parts 的根节点，所以成功导入后至少有一个节点。
     /// </summary>
     public SceneNode[] Nodes { get; internal set; } = [];
+
+    /// <summary>环境光（glTF 场景 extras.polyview_world，Assimp / three.js 的环境光合并进来）；文件里没有时为默认值（FromFile = false）。</summary>
+    public SceneWorld World { get; internal set; } = new();
 }
 
 public enum SceneNodeKind
@@ -82,6 +85,7 @@ public enum SceneNodeKind
     Light,
 }
 
+/// <summary>灯光类型（docs/07 §6）。Directional 在界面上显示为 Blender 的 Sun；Ambient 只在导入时过渡用，不生成节点，合并进 MeshData.World。</summary>
 public enum SceneLightType
 {
     Unknown,
@@ -90,6 +94,14 @@ public enum SceneLightType
     Spot,
     Ambient,
     Area,
+}
+
+public enum AreaShape
+{
+    Square,
+    Rectangle,
+    Disk,
+    Ellipse,
 }
 
 /// <summary>相机参数（没有的字段为 0）。</summary>
@@ -108,19 +120,67 @@ public sealed class SceneCamera
     public float Far { get; init; }
 }
 
-/// <summary>灯光参数。Color 为线性 RGB（0..1），亮度单独放在 Intensity。</summary>
+/// <summary>
+/// 灯光参数，对齐 Blender（docs/07_灯光规格.md §6）。Power 用 Blender 单位：Point / Spot / Area 为 W，Directional（Sun）为 W/m²。
+/// glTF 换算与 Blender glTF 导入器 Standard 模式一致：点光 / 聚光 W = cd × 4π / 683，日光 W/m² = lux / 683。
+/// </summary>
 public sealed class SceneLight
 {
     public SceneLightType Type { get; init; }
+
+    /// <summary>线性 RGB（0..1），不含亮度。</summary>
     public Vector3 Color { get; init; } = Vector3.One;
+
+    /// <summary>文件里的原始亮度（glTF 为 cd / lux，Assimp 为颜色最大分量，three.js 为 cd / lux / nit），保留方便核对。</summary>
     public float Intensity { get; init; } = 1f;
+
+    /// <summary>Blender 单位：Point / Spot / Area 为 W，Directional（Sun）为 W/m²。</summary>
+    public float Power { get; init; }
+
+    /// <summary>Point / Spot 的软尺寸半径（m，Blender Radius）。</summary>
+    public float Radius { get; init; }
 
     /// <summary>照射范围，0 表示无限。</summary>
     public float Range { get; init; }
 
-    /// <summary>聚光灯内 / 外锥角（弧度，半角）。</summary>
+    /// <summary>聚光内 / 外锥半角（弧度，与 glTF 相同）。</summary>
     public float InnerConeAngle { get; init; }
     public float OuterConeAngle { get; init; }
+
+    /// <summary>Blender Spot Size（外锥全角）。</summary>
+    public float SpotSize => OuterConeAngle * 2;
+
+    /// <summary>Blender Blend（0..1）= 1 − inner / outer。</summary>
+    public float SpotBlend { get; init; }
+
+    public AreaShape Shape { get; init; }
+
+    /// <summary>面光尺寸（m），Square / Disk 只用 X。</summary>
+    public Vector2 Size { get; init; }
+
+    /// <summary>Blender glTF 插件用的光效常数（lm/W）。</summary>
+    public const float WattsToLumens = 683f;
+
+    public static float CandelaToWatts(float candela) => candela * 4f * MathF.PI / WattsToLumens;
+
+    public static float LuxToWattsPerSquareMeter(float lux) => lux / WattsToLumens;
+
+    /// <summary>Blender 默认值（docs/07 §2.3）。</summary>
+    public const float DefaultPointPower = 1000f;
+    public const float DefaultRadius = 0.1f;
+    public const float DefaultSunStrength = 1f;
+    public static readonly float DefaultSpotSize = MathF.PI / 4f;
+    public const float DefaultSpotBlend = 0.15f;
+}
+
+/// <summary>Blender 的 World：背景颜色 + 强度，在这里作为均匀环境光，不是灯光节点。</summary>
+public sealed class SceneWorld
+{
+    public Vector3 Color { get; init; } = new(0.05f);
+    public float Strength { get; init; } = 1f;
+
+    /// <summary>true 表示文件里有 World / 环境光信息；false 表示这是默认值。</summary>
+    public bool FromFile { get; init; }
 }
 
 /// <summary>场景树里的一个节点。</summary>
