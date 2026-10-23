@@ -39,6 +39,45 @@ public sealed class SceneRenderer : IDisposable
             float4 Color : COLOR0;
         };
 
+        // 选中描边：先把选中对象画进 R8 掩码，再全屏找掩码边缘（2 像素外扩），Blender 活动物体色 #FFA028。
+        Texture2D<float> SelectionMask : register(t1);
+
+        float4 PSMask(VsOut input) : SV_Target
+        {
+            return 1;
+        }
+
+        float4 VSFull(uint id : SV_VertexID) : SV_Position
+        {
+            float2 uv = float2((id << 1) & 2, id & 2);
+            return float4(uv * float2(2, -2) + float2(-1, 1), 0, 1);
+        }
+
+        float4 PSOutline(float4 position : SV_Position) : SV_Target
+        {
+            int2 p = int2(position.xy);
+            if (SelectionMask.Load(int3(p, 0)) > 0.5)
+            {
+                discard;
+            }
+
+            [unroll]
+            for (int y = -2; y <= 2; y++)
+            {
+                [unroll]
+                for (int x = -2; x <= 2; x++)
+                {
+                    if (SelectionMask.Load(int3(p + int2(x, y), 0)) > 0.5)
+                    {
+                        return float4(1.0, 0.627, 0.157, 1);
+                    }
+                }
+            }
+
+            discard;
+            return 0;
+        }
+
         VsOut VSMain(VsIn input)
         {
             VsOut output;
@@ -78,8 +117,6 @@ public sealed class SceneRenderer : IDisposable
             float hemisphere = lerp(0.32, 0.55, normal.y * 0.5 + 0.5);
             float4 albedo = BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
             float3 color = albedo.rgb * (hemisphere + 0.75 * key);
-            // 选中高亮：往橙色混一部分，贴图模型 / 线框下也看得出来。
-            color = lerp(color, float3(1.0, 0.62, 0.18), Highlight * 0.45);
             return float4(saturate(color), 1);
         }
         """;
@@ -92,6 +129,19 @@ public sealed class SceneRenderer : IDisposable
     readonly ID3D11Buffer _constants;
     readonly ID3D11DepthStencilState _depthState;
     readonly ID3D11DepthStencilState _noDepthState;
+    readonly ID3D11DepthStencilState _gridDepthState;
+    readonly ID3D11PixelShader _maskShader;
+    readonly ID3D11VertexShader _fullVertexShader;
+    readonly ID3D11PixelShader _outlineShader;
+    readonly ID3D11BlendState _alphaBlend;
+    readonly ID3D11ShaderResourceView[] _maskSlot = new ID3D11ShaderResourceView[1];
+    readonly ID3D11ShaderResourceView[] _nullSlot = new ID3D11ShaderResourceView[1];
+    ID3D11Texture2D? _mask;
+    ID3D11RenderTargetView? _maskView;
+    ID3D11ShaderResourceView? _maskResource;
+    Matrix4x4 _lastViewProjection;
+    Vector3 _lastLight;
+    Vector3 _lastScale = Vector3.One;
     readonly ID3D11Buffer _gizmoVertices;
     readonly Gizmo.Range[] _gizmoRanges;
     TransformTool _gizmoTool;
@@ -143,6 +193,10 @@ public sealed class SceneRenderer : IDisposable
         var bytecode = Compile("VSMain", "vs_5_0");
         _vertexShader = device.CreateVertexShader(bytecode);
         _pixelShader = device.CreatePixelShader(Compile("PSMain", "ps_5_0"));
+        _maskShader = device.CreatePixelShader(Compile("PSMask", "ps_5_0"));
+        _fullVertexShader = device.CreateVertexShader(Compile("VSFull", "vs_5_0"));
+        _outlineShader = device.CreatePixelShader(Compile("PSOutline", "ps_5_0"));
+        _alphaBlend = device.CreateBlendState(BlendDescription.NonPremultiplied);
         _layout = device.CreateInputLayout(
             [
                 new InputElementDescription("POSITION", 0, Format.R32G32B32_Float, 0, 0),
@@ -159,6 +213,7 @@ public sealed class SceneRenderer : IDisposable
         _depthState = device.CreateDepthStencilState(DepthStencilDescription.Default);
         // 手柄：关深度测试和写入，永远画在模型之上。
         _noDepthState = device.CreateDepthStencilState(DepthStencilDescription.None);
+        _gridDepthState = device.CreateDepthStencilState(DepthStencilDescription.DepthRead);
         _gizmoVertices = device.CreateBuffer(Gizmo.Build(out _gizmoRanges), BindFlags.VertexBuffer);
         var solid = new RasterizerDescription(CullMode.Back, FillMode.Solid)
         {
@@ -285,7 +340,67 @@ public sealed class SceneRenderer : IDisposable
         _gizmoActive = activePart;
     }
 
-    void DrawGizmo(in Matrix4x4 viewProjection, Vector3 light)
+    /// <summary>选中对象的轮廓：画进掩码（不测深度，被挡住也描边，与 Blender 一致），再全屏边缘检测叠加到画面。</summary>
+    void DrawOutline()
+    {
+        GpuObject? gpu = null;
+        for (int i = 0; i < _objects.Count; i++)
+        {
+            if (_objects[i].Id == SelectedId && _objects[i].Visible)
+            {
+                gpu = _objects[i];
+            }
+        }
+
+        if (gpu == null || _maskView == null || _maskResource == null || _colorView == null)
+        {
+            return;
+        }
+
+        _context.ClearRenderTargetView(_maskView, new Color4(0f, 0f, 0f, 0f));
+        _targets[0] = _maskView;
+        _context.OMSetRenderTargets(1, _targets, null);
+        _context.OMSetDepthStencilState(_noDepthState, 0);
+        _context.RSSetState(_doubleSidedRasterizer);
+        _context.PSSetShader(_maskShader);
+        WriteConstants(gpu.World * Matrix4x4.CreateScale(_lastScale), _lastViewProjection, _lastLight, unlit: false, highlight: 0f);
+        _vertexSlot[0] = gpu.Vertices;
+        _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
+        _context.IASetIndexBuffer(gpu.Indices, Format.R32_UInt, 0);
+        var parts = gpu.Parts;
+        for (int p = 0; p < parts.Length; p++)
+        {
+            var part = parts[p];
+            if (part.IndexCount <= 0 || part.StartIndex + part.IndexCount > gpu.IndexCount
+                || (gpu.PartHidden != null && p < gpu.PartHidden.Length && gpu.PartHidden[p])
+                || (gpu.PartHighlight != null && (p >= gpu.PartHighlight.Length || !gpu.PartHighlight[p])))
+            {
+                continue;
+            }
+
+            _context.DrawIndexed((uint)part.IndexCount, (uint)part.StartIndex, 0);
+        }
+
+        // 全屏边缘检测，叠加到颜色缓冲
+        _targets[0] = _colorView;
+        _context.OMSetRenderTargets(1, _targets, null);
+        _context.OMSetBlendState(_alphaBlend);
+        _context.IASetInputLayout(null);
+        _context.VSSetShader(_fullVertexShader);
+        _context.PSSetShader(_outlineShader);
+        _maskSlot[0] = _maskResource;
+        _context.PSSetShaderResources(1, 1, _maskSlot);
+        _context.Draw(3, 0);
+        _context.PSSetShaderResources(1, 1, _nullSlot);
+        _context.OMSetBlendState(null);
+        _context.IASetInputLayout(_layout);
+        _context.VSSetShader(_vertexShader);
+        _context.PSSetShader(_pixelShader);
+        _context.OMSetRenderTargets(1, _targets, _depthView);
+        _context.OMSetDepthStencilState(_depthState, 0);
+    }
+
+    void DrawGizmo(in Matrix4x4 viewProjection, in Matrix4x4 view, Vector3 light)
     {
         if (_gizmoTool == TransformTool.Select)
         {
@@ -294,6 +409,11 @@ public sealed class SceneRenderer : IDisposable
 
         _context.OMSetDepthStencilState(_noDepthState, 0);
         _context.RSSetState(_doubleSidedRasterizer);
+        _context.OMSetBlendState(_alphaBlend);
+        // 中心圆 / 视角环是朝向相机的公告板：取 view 的逆旋转。
+        Matrix4x4.Invert(view, out var inverseView);
+        inverseView.Translation = Vector3.Zero;
+        var billboard = Matrix4x4.CreateScale(_gizmoWorld.M11) * inverseView * Matrix4x4.CreateTranslation(_gizmoWorld.Translation);
         _vertexSlot[0] = _gizmoVertices;
         _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
         _textureSlot[0] = _whiteView;
@@ -304,7 +424,12 @@ public sealed class SceneRenderer : IDisposable
             var range = _gizmoRanges[tool * Gizmo.PartCount + part];
             float highlight = part == _gizmoActive || (_gizmoActive < 0 && part == _gizmoHover) ? 1f
                 : _gizmoActive >= 0 ? -0.5f : 0f;
-            WriteConstants(_gizmoWorld, viewProjection, light, unlit: true, highlight);
+            if (range.LineCount + range.TriCount == 0)
+            {
+                continue;
+            }
+
+            WriteConstants(part == Gizmo.Center ? billboard : _gizmoWorld, viewProjection, light, unlit: true, highlight);
             if (range.LineCount > 0)
             {
                 _context.IASetPrimitiveTopology(PrimitiveTopology.LineList);
@@ -319,6 +444,7 @@ public sealed class SceneRenderer : IDisposable
         }
 
         _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        _context.OMSetBlendState(null);
     }
 
     /// <summary>显示 / 隐藏一个对象（不释放资源）。</summary>
@@ -445,6 +571,22 @@ public sealed class SceneRenderer : IDisposable
             BindFlags = BindFlags.DepthStencil,
         });
         _depthView = _device.CreateDepthStencilView(_depth);
+        _maskResource?.Dispose();
+        _maskView?.Dispose();
+        _mask?.Dispose();
+        _mask = _device.CreateTexture2D(new Texture2DDescription
+        {
+            Width = (uint)pixelWidth,
+            Height = (uint)pixelHeight,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.R8_UNorm,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
+        });
+        _maskView = _device.CreateRenderTargetView(_mask);
+        _maskResource = _device.CreateShaderResourceView(_mask);
     }
 
     public bool ShowGrid { get; set; } = true;
@@ -486,6 +628,9 @@ public sealed class SceneRenderer : IDisposable
         var up = Vector3.Cross(right, forward);
         var light = Vector3.Normalize(-forward + right * 0.45f + up * 0.75f);
         var viewProjection = view * projection;
+        _lastViewProjection = viewProjection;
+        _lastLight = light;
+        _lastScale = scale;
 
         _context.ClearRenderTargetView(_colorView, new Color4(0.11f, 0.12f, 0.14f, 1f));
         _context.ClearDepthStencilView(_depthView, DepthStencilClearFlags.Depth, 1f, 0);
@@ -503,19 +648,6 @@ public sealed class SceneRenderer : IDisposable
         _context.PSSetConstantBuffers(0, 1, _constantSlot);
         _stride[0] = (uint)Marshal.SizeOf<Vertex>();
         _offset[0] = 0;
-        if (ShowGrid && _gridVertices != null)
-        {
-            WriteConstants(Matrix4x4.Identity, viewProjection, light, unlit: true, highlight: 0f);
-            _context.RSSetState(_doubleSidedRasterizer);
-            _context.IASetPrimitiveTopology(PrimitiveTopology.LineList);
-            _vertexSlot[0] = _gridVertices;
-            _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
-            _textureSlot[0] = _whiteView;
-            _context.PSSetShaderResources(0, 1, _textureSlot);
-            _context.Draw(_gridVertexCount, 0);
-            _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-        }
-
         _samplerSlot[0] = _sampler;
         _context.PSSetSamplers(0, 1, _samplerSlot);
         var sceneWorld = Matrix4x4.CreateScale(scale);
@@ -563,7 +695,24 @@ public sealed class SceneRenderer : IDisposable
             }
         }
 
-        DrawGizmo(viewProjection, light);
+        if (ShowGrid && _gridVertices != null)
+        {
+            // 地面网格画在不透明模型之后：深度测试开（LessEqual）、不写深度，被模型挡住的部分不显示。
+            _context.OMSetDepthStencilState(_gridDepthState, 0);
+            WriteConstants(Matrix4x4.Identity, viewProjection, light, unlit: true, highlight: 0f);
+            _context.RSSetState(_doubleSidedRasterizer);
+            _context.IASetPrimitiveTopology(PrimitiveTopology.LineList);
+            _vertexSlot[0] = _gridVertices;
+            _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
+            _textureSlot[0] = _whiteView;
+            _context.PSSetShaderResources(0, 1, _textureSlot);
+            _context.Draw(_gridVertexCount, 0);
+            _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+            _context.OMSetDepthStencilState(_depthState, 0);
+        }
+
+        DrawOutline();
+        DrawGizmo(viewProjection, view, light);
         _context.Flush();
     }
 
@@ -628,6 +777,14 @@ public sealed class SceneRenderer : IDisposable
         _layout.Dispose();
         _vertexShader.Dispose();
         _pixelShader.Dispose();
+        _maskShader.Dispose();
+        _fullVertexShader.Dispose();
+        _outlineShader.Dispose();
+        _alphaBlend.Dispose();
+        _gridDepthState.Dispose();
+        _maskResource?.Dispose();
+        _maskView?.Dispose();
+        _mask?.Dispose();
         _depthState.Dispose();
         _noDepthState.Dispose();
         _gizmoVertices.Dispose();

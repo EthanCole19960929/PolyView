@@ -34,6 +34,7 @@ public sealed partial class ModelViewport
     bool _xformModal;
     TransformTool _xformTool;
     int _xformPart;          // 0..2 轴，3 = 自由 / 等比
+    int _xformHandle = -1;   // 正在拖的手柄部件（高亮用），模态时 -1
     bool _xformPlane;        // true：排除 _xformPart 轴（Shift+轴）
     ObjectTransform _xformStart;
     Point _xformMouse0;
@@ -342,10 +343,10 @@ public sealed partial class ModelViewport
         var center = o.Transform.Position;
         _gizmoSize = GizmoWorldSize(center);
         _renderer.SetGizmo(
-            _xformActive && _xformModal ? TransformTool.Select : tool,
+            tool,
             Matrix4x4.CreateScale(_gizmoSize) * Matrix4x4.CreateTranslation(center),
             _hoverPart,
-            _xformActive ? _xformPart : -1);
+            _xformActive ? _xformHandle : -1);
     }
 
     /// <summary>规格 4：P / H × 2 × d × tan(fov/2)（透视，d 为沿视线深度）或 P / H × 2 × OrthoHalfHeight（正交）。</summary>
@@ -398,7 +399,9 @@ public sealed partial class ModelViewport
         }
 
         var center = o.Transform.Position;
-        return Gizmo.HitTest(_tool, center, GizmoWorldSize(center), new Vector2((float)p.X, (float)p.Y), Project);
+        var forward = ViewDirection;
+        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY));
+        return Gizmo.HitTest(_tool, center, GizmoWorldSize(center), right, new Vector2((float)p.X, (float)p.Y), Project);
     }
 
     // ---------------- 交互 ----------------
@@ -491,6 +494,7 @@ public sealed partial class ModelViewport
                     int axis = key - Key.X;
                     _xformPart = axis;
                     _xformPlane = shift;
+                    _xformHandle = -1;
                     RestartTransformMath();
                     return true;
                 case Key.Enter:
@@ -587,6 +591,14 @@ public sealed partial class ModelViewport
         _xformActive = true;
         _xformModal = modal;
         _xformTool = tool;
+        _xformHandle = modal ? -1 : part;
+        // 平面方块 = 锁平面（排除对应的轴）
+        if (part > Gizmo.Center)
+        {
+            plane = true;
+            part = Gizmo.PlaneExcludedAxis[part - 4];
+        }
+
         _xformPart = part;
         _xformPlane = plane;
         _xformStart = o.Transform;
