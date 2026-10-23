@@ -1,4 +1,4 @@
-namespace PolyView;
+﻿namespace PolyView;
 
 public static class UiText
 {
@@ -53,4 +53,28 @@ public static class UiText
     public static string HintScale => Chinese
         ? "拖动轴端方块沿该轴缩放，拖中心等比缩放；右键或 Esc 取消。"
         : "Drag a box handle to scale along that axis, or drag the center to scale evenly. Right-click or Esc to cancel.";
+
+    // Scene outliner
+    public static string OutlinerTitle => Chinese ? "场景列表" : "Outliner";
+    public static string OutlinerScene => Chinese ? "场景" : "Scene";
+    public static string KindMesh => Chinese ? "模型" : "Mesh";
+    public static string KindCamera => Chinese ? "相机" : "Camera";
+    public static string KindLight => Chinese ? "灯光" : "Light";
+    public static string KindEmpty => Chinese ? "空节点" : "Empty";
+    public static string PropTitle => Chinese ? "属性" : "Properties";
+    public static string PropVertices => Chinese ? "顶点" : "Vertices";
+    public static string PropTriangles => Chinese ? "三角形" : "Triangles";
+    public static string PropSize => Chinese ? "尺寸" : "Size";
+    public static string ToggleVisibility => Chinese ? "显示/隐藏" : "Show/Hide";
+    public static string LightPoint => Chinese ? "点光" : "Point";
+    public static string LightSun => Chinese ? "日光" : "Sun";
+    public static string LightSpot => Chinese ? "聚光" : "Spot";
+    public static string LightArea => Chinese ? "面光" : "Area";
+    public static string LightAmbient => Chinese ? "环境光" : "Ambient";
+    public static string KindWorld => Chinese ? "世界" : "World";
+    public static string OutlinerSearch => Chinese ? "搜索" : "Search";
+    public static string TransformTitle => Chinese ? "变换" : "Transform";
+    public static string TransformLocation => Chinese ? "位置" : "Location";
+    public static string TransformRotation => Chinese ? "旋转" : "Rotation";
+    public static string TransformScale => Chinese ? "缩放" : "Scale";
 }
