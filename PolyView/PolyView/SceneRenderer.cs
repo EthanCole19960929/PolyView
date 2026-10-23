@@ -17,16 +17,23 @@ public sealed class SceneRenderer : IDisposable
             float3 LightDirection;
         };
 
+        Texture2D BaseColorMap : register(t0);
+        SamplerState BaseColorSampler : register(s0);
+
         struct VsIn
         {
             float3 Position : POSITION;
             float3 Normal : NORMAL;
+            float2 TexCoord : TEXCOORD0;
+            float4 Color : COLOR0;
         };
 
         struct VsOut
         {
             float4 Position : SV_Position;
             float3 Normal : TEXCOORD0;
+            float2 TexCoord : TEXCOORD1;
+            float4 Color : COLOR0;
         };
 
         VsOut VSMain(VsIn input)
@@ -34,15 +41,25 @@ public sealed class SceneRenderer : IDisposable
             VsOut output;
             output.Position = mul(WorldViewProj, float4(input.Position, 1));
             output.Normal = mul((float3x3)NormalWorld, input.Normal);
+            output.TexCoord = input.TexCoord;
+            output.Color = input.Color;
             return output;
         }
 
-        float4 PSMain(VsOut input) : SV_Target
+        float4 PSMain(VsOut input, bool frontFace : SV_IsFrontFace) : SV_Target
         {
             float3 normal = normalize(input.Normal);
-            float light = saturate(dot(normal, LightDirection));
-            float3 color = float3(0.73, 0.77, 0.82) * (0.22 + 0.78 * light);
-            return float4(color, 1);
+            if (!frontFace)
+            {
+                normal = -normal;
+            }
+
+            float key = saturate(dot(normal, LightDirection));
+            float fill = saturate(dot(normal, normalize(float3(-0.5, 0.2, -0.6)))) * 0.25;
+            float4 albedo = BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
+            float3 tint = float3(0.73, 0.77, 0.82);
+            float3 color = albedo.rgb * tint * (0.25 + 0.75 * key + fill) * 1.25;
+            return float4(saturate(color), 1);
         }
         """;
 
@@ -55,6 +72,15 @@ public sealed class SceneRenderer : IDisposable
     readonly ID3D11DepthStencilState _depthState;
     readonly ID3D11RasterizerState _rasterizer;
     readonly ID3D11RasterizerState _wireRasterizer;
+    readonly ID3D11RasterizerState _doubleSidedRasterizer;
+    readonly ID3D11RasterizerState _doubleSidedWireRasterizer;
+    readonly ID3D11SamplerState _sampler;
+    readonly ID3D11Texture2D _whiteTexture;
+    readonly ID3D11ShaderResourceView _whiteView;
+    readonly List<(ID3D11Texture2D Texture, ID3D11ShaderResourceView View)> _meshTextures = [];
+    MeshPart[] _parts = [];
+    readonly ID3D11ShaderResourceView[] _textureSlot = new ID3D11ShaderResourceView[1];
+    readonly ID3D11SamplerState[] _samplerSlot = new ID3D11SamplerState[1];
     ID3D11Texture2D? _color;
     ID3D11RenderTargetView? _colorView;
     ID3D11Texture2D? _depth;
@@ -90,6 +116,8 @@ public sealed class SceneRenderer : IDisposable
             [
                 new InputElementDescription("POSITION", 0, Format.R32G32B32_Float, 0, 0),
                 new InputElementDescription("NORMAL", 0, Format.R32G32B32_Float, 12, 0),
+                new InputElementDescription("TEXCOORD", 0, Format.R32G32_Float, 24, 0),
+                new InputElementDescription("COLOR", 0, Format.R32G32B32A32_Float, 32, 0),
             ],
             bytecode);
         _constants = device.CreateBuffer(
@@ -110,6 +138,35 @@ public sealed class SceneRenderer : IDisposable
         };
         _rasterizer = device.CreateRasterizerState(solid);
         _wireRasterizer = device.CreateRasterizerState(wire);
+        _doubleSidedRasterizer = device.CreateRasterizerState(solid with { CullMode = CullMode.None });
+        _doubleSidedWireRasterizer = device.CreateRasterizerState(wire with { CullMode = CullMode.None });
+        _sampler = device.CreateSamplerState(new SamplerDescription(
+            Filter.MinMagMipLinear,
+            TextureAddressMode.Wrap,
+            TextureAddressMode.Wrap,
+            TextureAddressMode.Wrap));
+        (_whiteTexture, _whiteView) = CreateTexture(1, 1, [255, 255, 255, 255]);
+    }
+
+    unsafe (ID3D11Texture2D Texture, ID3D11ShaderResourceView View) CreateTexture(int width, int height, byte[] bgra)
+    {
+        fixed (byte* pixels = bgra)
+        {
+            var texture = _device.CreateTexture2D(
+                new Texture2DDescription
+                {
+                    Width = (uint)width,
+                    Height = (uint)height,
+                    MipLevels = 1,
+                    ArraySize = 1,
+                    Format = Format.B8G8R8A8_UNorm,
+                    SampleDescription = new SampleDescription(1, 0),
+                    Usage = ResourceUsage.Immutable,
+                    BindFlags = BindFlags.ShaderResource,
+                },
+                new SubresourceData((IntPtr)pixels, (uint)(width * 4)));
+            return (texture, _device.CreateShaderResourceView(texture));
+        }
     }
 
     public static SceneRenderer Create()
@@ -134,6 +191,21 @@ public sealed class SceneRenderer : IDisposable
         _vertices = _device.CreateBuffer(mesh.Vertices, BindFlags.VertexBuffer);
         _indices = _device.CreateBuffer(mesh.Indices, BindFlags.IndexBuffer);
         _indexCount = mesh.Indices.Length;
+        foreach (var (texture, view) in _meshTextures)
+        {
+            view.Dispose();
+            texture.Dispose();
+        }
+
+        _meshTextures.Clear();
+        foreach (var texture in mesh.Textures)
+        {
+            _meshTextures.Add(CreateTexture(texture.Width, texture.Height, texture.Bgra));
+        }
+
+        _parts = mesh.Parts.Length > 0
+            ? mesh.Parts
+            : [new MeshPart { StartIndex = 0, IndexCount = mesh.Indices.Length }];
     }
 
     public void Resize(int pixelWidth, int pixelHeight)
@@ -195,7 +267,9 @@ public sealed class SceneRenderer : IDisposable
         Matrix4x4.Invert(world, out var inverseWorld);
         var constants = new FrameConstants
         {
-            WorldViewProj = Matrix4x4.Transpose(world * view * projection),
+            // System.Numerics 是行向量约定；HLSL 常量缓冲默认按列主序读取，再配合 mul(M, v)，
+            // 所以这里直接上传原矩阵（不转置），否则投影会被打乱、什么都画不出来。
+            WorldViewProj = world * view * projection,
             NormalWorld = Matrix4x4.Transpose(inverseWorld),
             LightDirection = Vector3.Normalize(new Vector3(0.35f, 0.8f, 0.5f)),
         };
@@ -210,7 +284,6 @@ public sealed class SceneRenderer : IDisposable
         _viewports[0] = new Viewport(0, 0, _pixelWidth, _pixelHeight);
         _context.RSSetViewports(1, _viewports);
         _context.OMSetDepthStencilState(_depthState, 0);
-        _context.RSSetState(Wireframe ? _wireRasterizer : _rasterizer);
         _context.IASetInputLayout(_layout);
         _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         _context.VSSetShader(_vertexShader);
@@ -225,7 +298,24 @@ public sealed class SceneRenderer : IDisposable
             _offset[0] = 0;
             _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
             _context.IASetIndexBuffer(_indices, Format.R32_UInt, 0);
-            _context.DrawIndexed((uint)_indexCount, 0, 0);
+            _samplerSlot[0] = _sampler;
+            _context.PSSetSamplers(0, 1, _samplerSlot);
+            foreach (var part in _parts)
+            {
+                if (part.IndexCount <= 0 || part.StartIndex + part.IndexCount > _indexCount)
+                {
+                    continue;
+                }
+
+                _context.RSSetState(part.DoubleSided
+                    ? (Wireframe ? _doubleSidedWireRasterizer : _doubleSidedRasterizer)
+                    : (Wireframe ? _wireRasterizer : _rasterizer));
+                _textureSlot[0] = part.TextureIndex >= 0 && part.TextureIndex < _meshTextures.Count
+                    ? _meshTextures[part.TextureIndex].View
+                    : _whiteView;
+                _context.PSSetShaderResources(0, 1, _textureSlot);
+                _context.DrawIndexed((uint)part.IndexCount, (uint)part.StartIndex, 0);
+            }
         }
 
         _context.Flush();
@@ -246,6 +336,17 @@ public sealed class SceneRenderer : IDisposable
         _depthState.Dispose();
         _rasterizer.Dispose();
         _wireRasterizer.Dispose();
+        _doubleSidedRasterizer.Dispose();
+        _doubleSidedWireRasterizer.Dispose();
+        foreach (var (texture, view) in _meshTextures)
+        {
+            view.Dispose();
+            texture.Dispose();
+        }
+
+        _whiteView.Dispose();
+        _whiteTexture.Dispose();
+        _sampler.Dispose();
         _context.Dispose();
         _device.Dispose();
     }

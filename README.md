@@ -34,12 +34,14 @@ Built with C# / WPF and Direct3D 11
 
 > [!NOTE]
 > PolyView is in **early development (Phase 0)**. Features below are planned unless checked in the roadmap.
+>
+> **Working today:** open OBJ / STL / GLB / glTF (all meshes and primitives, node hierarchy transforms, base color texture & vertex colors; skinned models shown in bind pose), drag & drop a model file anywhere on the window, orbit / pan / zoom.
 
 ## ✨ Features
 
 | | Feature | Description |
 | :---: | --- | --- |
-| 📂 | **Multi-format import** | glTF / GLB first, then OBJ and STL |
+| 📂 | **Multi-format import** | OBJ, STL, GLB and glTF (via the Open dialog, drag & drop onto the window, or `PolyView.exe <file>`) |
 | 🖱️ | **Smooth navigation** | Orbit, pan and zoom-to-cursor with the mouse |
 | 🎨 | **Shading modes** | Solid, wireframe and lit shading |
 | 🎯 | **Picking** | Click an object to see its name, vertex / triangle count and bounding box |

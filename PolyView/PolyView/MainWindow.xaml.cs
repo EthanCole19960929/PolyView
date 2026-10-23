@@ -6,11 +6,21 @@ namespace PolyView;
 
 public partial class MainWindow : Window
 {
+    string? _notice;
+    DateTime _noticeUntil;
+
     public MainWindow()
     {
         InitializeComponent();
         Viewport.ViewChanged += (_, _) => UpdateStatus();
         ApplyLanguage();
+
+        // 支持「打开方式」或命令行：PolyView.exe 模型路径
+        var startup = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(MeshImporter.IsSupported);
+        if (startup != null && System.IO.File.Exists(startup))
+        {
+            Viewport.LoadPath(System.IO.Path.GetFullPath(startup));
+        }
     }
 
     void ApplyLanguage()
@@ -27,6 +37,13 @@ public partial class MainWindow : Window
 
     void UpdateStatus()
     {
+        if (_notice != null && DateTime.Now < _noticeUntil)
+        {
+            StatusText.Text = _notice;
+            return;
+        }
+
+        _notice = null;
         if (!string.IsNullOrEmpty(Viewport.Failure))
         {
             StatusText.Text = Viewport.Failure;
@@ -88,6 +105,23 @@ public partial class MainWindow : Window
         Viewport.SetScale((float)ScaleSlider.Value, (float)StretchSlider.Value);
     }
 
+    void ShowNotice(string text)
+    {
+        _notice = text;
+        _noticeUntil = DateTime.Now.AddSeconds(4);
+        StatusText.Text = text;
+    }
+
+    void Window_DragEnter(object sender, DragEventArgs e)
+    {
+        Window_DragOver(sender, e);
+        if (e.Data.GetDataPresent(DataFormats.FileDrop) && !HasModelFile(e))
+        {
+            // 不支持的文件拖不进来（光标显示禁止），提前在状态栏说明原因。
+            ShowNotice(UiText.DropRejected);
+        }
+    }
+
     void Window_DragOver(object sender, DragEventArgs e)
     {
         e.Effects = HasModelFile(e) ? DragDropEffects.Copy : DragDropEffects.None;
@@ -96,15 +130,18 @@ public partial class MainWindow : Window
 
     void Window_Drop(object sender, DragEventArgs e)
     {
+        e.Handled = true;
         var path = FirstModelFile(e);
         if (path == null)
         {
-            StatusText.Text = UiText.DropRejected;
+            ShowNotice(UiText.DropRejected);
             return;
         }
 
+        _notice = null;
         ResetSliders();
         Viewport.LoadPath(path);
+        Activate();
     }
 
     void ResetSliders()
@@ -127,16 +164,6 @@ public partial class MainWindow : Window
             return null;
         }
 
-        foreach (var file in files)
-        {
-            var extension = System.IO.Path.GetExtension(file);
-            if (extension.Equals(".obj", StringComparison.OrdinalIgnoreCase)
-                || extension.Equals(".stl", StringComparison.OrdinalIgnoreCase))
-            {
-                return file;
-            }
-        }
-
-        return null;
+        return files.FirstOrDefault(MeshImporter.IsSupported);
     }
 }

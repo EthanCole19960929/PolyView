@@ -9,6 +9,7 @@
         MinWidth="800"
         Background="#FF1B1D22"
         AllowDrop="True"
+        DragEnter="Window_DragEnter"
         DragOver="Window_DragOver"
         Drop="Window_Drop">
     <DockPanel>

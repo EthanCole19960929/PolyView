@@ -6,6 +6,15 @@ namespace PolyView;
 
 public static class MeshImporter
 {
+    /// <summary>能打开（以及能拖进窗口）的扩展名。</summary>
+    public static readonly string[] SupportedExtensions = [".obj", ".stl", ".glb", ".gltf"];
+
+    public static bool IsSupported(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return SupportedExtensions.Any(e => e.Equals(extension, StringComparison.OrdinalIgnoreCase));
+    }
+
     public static ImportResult Load(string path)
     {
         if (!File.Exists(path))
@@ -20,13 +29,19 @@ public static class MeshImporter
             {
                 ".obj" => LoadObj(path),
                 ".stl" => LoadStl(path),
-                _ => throw new InvalidDataException("只支持 OBJ 和 STL。"),
+                ".glb" or ".gltf" => GltfImporter.Load(path),
+                _ => throw new InvalidDataException("只支持 OBJ、STL、GLB 和 glTF。"),
             };
             return ImportResult.Success(mesh);
         }
         catch (Exception ex) when (ex is InvalidDataException or FormatException or IOException or ArgumentException)
         {
             return ImportResult.Fail(ex.Message);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // SharpGLTF 的校验/解析异常类型很多，统一当作读取失败。
+            return ImportResult.Fail($"读取失败：{ex.Message}");
         }
     }
 
