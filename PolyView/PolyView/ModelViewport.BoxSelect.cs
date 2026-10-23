@@ -47,6 +47,7 @@ public sealed partial class ModelViewport
         }
 
         _boxHooked = true;
+        EnsureNavButtons();
         // Any other selection change (outliner click, Esc, delete, project load) drops the extra selection.
         SelectionChanged += (_, _) =>
         {

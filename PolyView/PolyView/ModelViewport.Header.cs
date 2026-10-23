@@ -124,7 +124,7 @@ public sealed partial class ModelViewport
         items.Add(new Separator());
         items.Add(Item(UiText.HdrPerspOrtho, () => ViewKey(Key.NumPad5, ModifierKeys.None), "Numpad 5"));
         var vp = new MenuItem { Header = UiText.HdrViewpoint };
-        vp.Items.Add(Item(UiText.HdrCameraView, null, "Numpad 0"));
+        vp.Items.Add(Item(UiText.HdrCameraView, () => ToggleCameraView(), "Numpad 0"));
         vp.Items.Add(new Separator());
         vp.Items.Add(Item(UiText.HdrViewTop, () => ViewKey(Key.NumPad7, ModifierKeys.None), "Numpad 7"));
         vp.Items.Add(Item(UiText.HdrViewBottom, () => ViewKey(Key.NumPad7, ModifierKeys.Control), "Ctrl Numpad 7"));

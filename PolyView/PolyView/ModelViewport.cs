@@ -445,9 +445,10 @@ public sealed partial class ModelViewport : UserControl
                 SetView(0f, ctrl ? -OrbitCamera.MaxPitch : OrbitCamera.MaxPitch);
                 return true;
             case Key.NumPad5:
-                _camera.Orthographic = !_camera.Orthographic;
-                Invalidate();
-                ViewChanged?.Invoke(this, EventArgs.Empty);
+                ToggleOrtho();
+                return true;
+            case Key.NumPad0:
+                ToggleCameraView();
                 return true;
             default:
                 return false;
