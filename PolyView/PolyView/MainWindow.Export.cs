@@ -15,6 +15,7 @@ public partial class MainWindow
     {
         MenuExport.IsEnabled = true;
         MenuExport.Click += (_, _) => ExportWithDialog();
+        InitImport();
     }
 
     /// <summary>

@@ -245,6 +245,7 @@ public partial class MainWindow
             try
             {
                 var (map, f) = Viewport.RestoreProject(doc, assets, imports);
+                Viewport.ApplyProjectNames(doc, map);
                 failed = f;
                 Outliner.RestoreProject(doc, map);
             }

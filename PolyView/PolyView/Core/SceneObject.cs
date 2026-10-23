@@ -6,7 +6,7 @@ namespace PolyView;
 public sealed class SceneObject
 {
     public required int Id { get; init; }
-    public required string Name { get; init; }
+    public required string Name { get; set; }
     public string? SourcePath { get; init; }
     public required MeshData Mesh { get; init; }
 

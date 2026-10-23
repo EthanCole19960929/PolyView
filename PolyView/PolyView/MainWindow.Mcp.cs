@@ -143,8 +143,8 @@ public partial class MainWindow
     {
         if (!File.Exists(path)) return new { ok = false, error = "file not found" };
         if (!MeshImporter.IsSupported(path)) return new { ok = false, error = "unsupported format: " + string.Join(" ", MeshImporter.SupportedExtensions) };
-        Viewport.AddPath(Path.GetFullPath(path));
-        return new { ok = true, note = "import started; call get_scene to see the new object" };
+        var added = ImportModel(Path.GetFullPath(path));
+        return new { ok = true, id = added.Id, name = added.Name };
     }
 
     internal object McpSave(string? path)
