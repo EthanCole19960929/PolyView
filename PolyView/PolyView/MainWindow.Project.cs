@@ -176,9 +176,18 @@ public partial class MainWindow
         }
 
         var name = _projectPath == null ? UiText.Untitled : Path.GetFileName(_projectPath);
-        var answer = PvMessageDialog.Show(this, UiText.AskSaveChanges(name), "PolyView", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        // 另存为… / 保存 (default) / 不保存 / 取消. Save As writes a new file and leaves the original untouched;
+        // cancelling its file dialog cancels the pending close / open.
+        var answer = PvMessageDialog.ShowCustom(this, UiText.AskSaveChanges(name), "PolyView", MessageBoxImage.Question,
+        [
+            (UiText.DlgSaveAs, MessageBoxResult.OK, false),
+            (UiText.DlgSave, MessageBoxResult.Yes, true),
+            (UiText.DlgDontSave, MessageBoxResult.No, false),
+            (UiText.DlgCancel, MessageBoxResult.Cancel, false),
+        ], MessageBoxResult.Cancel);
         return answer switch
         {
+            MessageBoxResult.OK => SaveProject(saveAs: true),
             MessageBoxResult.Yes => SaveProject(saveAs: false),
             MessageBoxResult.No => true,
             _ => false,

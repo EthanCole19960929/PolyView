@@ -33,6 +33,8 @@ public static partial class UiText
         ? "这个工程是用更新版本的 PolyView 保存的，请先升级 PolyView。"
         : "This project was saved by a newer PolyView. Please update PolyView.";
 
+    public static string DlgSaveAs => Chinese ? "另存为…" : "Save As…";
+
     public static string AskSaveChanges(string name) => Chinese
         ? $"“{name}”有未保存的修改，要保存吗？"
         : $"Save changes to \"{name}\" before closing?";

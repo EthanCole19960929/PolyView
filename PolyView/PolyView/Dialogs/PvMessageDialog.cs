@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -33,21 +33,35 @@ public sealed class PvMessageDialog : Window
         return dlg._result;
     }
 
-    PvMessageDialog(string text, string caption, MessageBoxButton buttons, MessageBoxImage image)
+    /// <summary>Dialog with custom buttons (label, result, primary). Esc / the close button return cancelResult; Enter picks the primary button.</summary>
+    public static MessageBoxResult ShowCustom(Window? owner, string text, string caption, MessageBoxImage image,
+        (string Label, MessageBoxResult Result, bool Primary)[] buttons, MessageBoxResult cancelResult)
+    {
+        owner ??= Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
+                  ?? Application.Current?.MainWindow;
+        var dlg = new PvMessageDialog(text, caption, MessageBoxButton.OK, image, buttons, cancelResult);
+        if (owner != null && owner.IsLoaded && owner != dlg) { dlg.Owner = owner; dlg.WindowStartupLocation = WindowStartupLocation.CenterOwner; }
+        else dlg.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        dlg.ShowDialog();
+        return dlg._result;
+    }
+
+    PvMessageDialog(string text, string caption, MessageBoxButton buttons, MessageBoxImage image,
+        (string, MessageBoxResult, bool)[]? custom = null, MessageBoxResult customCancel = MessageBoxResult.Cancel)
     {
         WindowStyle = WindowStyle.None; AllowsTransparency = true; Background = Brushes.Transparent;
         ResizeMode = ResizeMode.NoResize; SizeToContent = SizeToContent.WidthAndHeight; ShowInTaskbar = false;
         Title = caption; FontSize = 13; FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI");
         UseLayoutRounding = true; SnapsToDevicePixels = true;
 
-        var defs = buttons switch
+        var defs = custom ?? buttons switch
         {
             MessageBoxButton.YesNoCancel => new[] { (UiText.DlgSave, MessageBoxResult.Yes, true), (UiText.DlgDontSave, MessageBoxResult.No, false), (UiText.DlgCancel, MessageBoxResult.Cancel, false) },
             MessageBoxButton.YesNo => new[] { (UiText.DlgYes, MessageBoxResult.Yes, true), (UiText.DlgNo, MessageBoxResult.No, false) },
             MessageBoxButton.OKCancel => new[] { (UiText.DlgOk, MessageBoxResult.OK, true), (UiText.DlgCancel, MessageBoxResult.Cancel, false) },
             _ => new[] { (UiText.DlgOk, MessageBoxResult.OK, true) },
         };
-        _cancelResult = buttons switch
+        _cancelResult = custom != null ? customCancel : buttons switch
         {
             MessageBoxButton.YesNoCancel or MessageBoxButton.OKCancel => MessageBoxResult.Cancel,
             MessageBoxButton.YesNo => MessageBoxResult.No,
@@ -87,7 +101,7 @@ public sealed class PvMessageDialog : Window
         PreviewKeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape) { Finish(_cancelResult); e.Handled = true; }
-            else if (e.Key == Key.Enter) { Finish(defs[0].Item2); e.Handled = true; }
+            else if (e.Key == Key.Enter) { Finish((defs.FirstOrDefault(x => x.Item3) is var p && p.Item1 != null ? p : defs[0]).Item2); e.Handled = true; }
         };
     }
 
