@@ -122,15 +122,15 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 | 小I | 只动 `assets/` |
 | 小C | 只做审查，结论写进 `审查.md` |
 | 小M | 以后负责骨骼动画样例 |
-| Ethan | 合并到 master |
+| Ethan | 用户本人，负责测试效果 |
 
 改别人负责的文件前，先在群里说一声。
 
 ## Git 规则
 
-- 每个代理推自己的分支：`feat/<主题>-<名字>`，例如 `feat/import-xiaoB`。
-- 不推 master，不强推（不用 `--force`）。合并到 master 由 Ethan 做。
-- 推之前先 `git pull --rebase`，编译必须通过。
+- 本项目只在 master 一个分支开发，不建功能分支 / 额外 worktree，所有人都在主目录 `1023_PolyView` 的 master 上直接改。
+- 改动前先 `git pull --rebase`，编译通过即提交并推送 master；不强推（不用 `--force`）。效果由用户自己测试，代理不再打开程序逐项验收。
+- 编译必须通过才推。
 - 提交信息用 `[名字]` 开头，例如 `[小B] GLB/FBX/DAE 导入`。
 - 不提交编译产物：`.gitignore` 已忽略 `bin/`、`obj/`、`.vs/`、`*.user`、`/_旧版备份/`。注意 `[Oo]bj/` 也会忽略名叫 `obj` 的模型目录，所以 `Models/` 保持平铺。
 - 本机推送 GitHub 若报 TLS 错误，用 `git -c http.sslBackend=schannel push ...`。
@@ -165,7 +165,7 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 - 窗口缩放时模型不能变形。150% DPI 下画面要清晰。
 - 反复打开、关闭 10 到 20 次，内存要回到起点。渲染循环里不能分配新内存，关闭时所有资源都要 Dispose。
 ### Git
-- 各人推自己的分支，禁止强推。直接推 master 要先问 Ethan。推之前先 pull --rebase，编译不过不推。
+- 只用 master 一个分支，禁止强推。推之前先 pull --rebase，编译不过不推。
 
 ### 实际踩过的坑（小B）
 
