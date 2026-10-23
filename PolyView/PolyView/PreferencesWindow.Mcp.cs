@@ -89,10 +89,20 @@ public partial class PreferencesWindow
                 var id = c.Id;
                 cb.Click += (_, _) => { if (cb.IsChecked == true) _mcpChecked.Add(id); else _mcpChecked.Remove(id); };
                 row.Children.Add(cb);
-                row.Children.Add(Cell(c.Name + (c.CanAuto ? "" : UiText.T("（手动）", " (manual)")), c.Installed ? Brushes.White : DimBrush, 170));
+                row.Children.Add(Cell(c.Name, c.Installed ? Brushes.White : DimBrush, 170));
                 row.Children.Add(Cell(c.Installed ? "✔" : "—", c.Installed ? OkBrush : DimBrush));
                 row.Children.Add(Cell(c.ProcessRunning ? "✔" : "—", c.ProcessRunning ? OkBrush : DimBrush));
                 row.Children.Add(Cell(c.Connected ? "✔" : "—", c.Connected ? OkBrush : DimBrush));
+                if (!c.CanAuto)
+                {
+                    row.Children.Add(new Border { Background = WarnBrush, CornerRadius = new CornerRadius(3), Padding = new Thickness(4, 0, 4, 0), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center,
+                        Child = new TextBlock { Text = UiText.T("手动", "Manual"), Foreground = Brushes.Black, FontSize = 11 } });
+                    var cc = c;
+                    var btn = PrefButton(UiText.T("\u590d\u5236\u914d\u7f6e", "Copy config"), () => { Clipboard.SetText(McpClients.SnippetFor(cc)); message.Text = UiText.T($"\u5df2\u590d\u5236 {cc.Name} \u7684\u914d\u7f6e\uff0c\u8bf7\u5728\u5b83\u7684 MCP \u8bbe\u7f6e\u91cc\u7c98\u8d34\uff08\u5730\u5740 {McpServerHost.Url}\uff09\u3002", $"Copied config for {cc.Name}; paste it in its MCP settings."); });
+                    btn.Height = 20;
+                    row.Children.Add(btn);
+                }
+
                 row.ToolTip = c.ConfigPath ?? UiText.T("该客户端需在其设置里手动粘贴配置", "Paste the copied config in this client's settings");
                 list.Children.Add(row);
             }

@@ -187,6 +187,8 @@ public static class McpClients
         return string.Join("\n", lines);
     }
 
+    public static string SnippetFor(McpClient c) => JsonSerializer.Serialize(new Dictionary<string, object> { ["mcpServers"] = new Dictionary<string, object> { [ServerName] = EntryFor(c) } }, new JsonSerializerOptions { WriteIndented = true });
+
     public static string HttpSnippet => JsonSerializer.Serialize(new { mcpServers = new Dictionary<string, object> { [ServerName] = new { url = McpServerHost.Url } } }, new JsonSerializerOptions { WriteIndented = true });
 
     public static string StdioSnippet => JsonSerializer.Serialize(new { mcpServers = new Dictionary<string, object> { [ServerName] = new { command = "npx", args = new[] { "-y", "mcp-remote", McpServerHost.Url } } } }, new JsonSerializerOptions { WriteIndented = true });
