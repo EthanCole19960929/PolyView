@@ -18,6 +18,8 @@ PolyView 是一个用 C# 写的轻量 Windows 3D 模型查看器：WPF 做界面
 | 06 | [06_开发进度.md](06_开发进度.md) | novel | 2026-10-23 | 各成员分工、分支、已完成 / 进行中 / 待办和已知问题 |
 | 07 | [07_灯光规格.md](07_灯光规格.md) | novel | 2026-10-23 | 对齐 Blender 的灯光类型（Point/Sun/Spot/Area）与 World 环境光、glTF/Assimp 导入映射、视口图标、着色模式、数据模型、分工与验收 |
 | 08 | [08_开源项目借鉴.md](08_开源项目借鉴.md) | novel | 2026-10-23 | 借鉴 Helix Toolkit / Stride / ImGuizmo / Flax 源码：选中描边、无限网格遮挡、手柄几何与拖拽数学、撤销/重做、大纲树、灯光图标、BVH 拾取、吸附，按 P0/P1/P2 对到 PolyView 类和负责人 |
+| 09 | [09_工程文件格式.md](09_工程文件格式.md) | program | 2026-10-23 | .pvproj 工程文件（zip + project.json）设计：保存/复原内容、保存打开流程、版本兼容、实现计划 |
+| 10 | [10_渲染实现与性能.md](10_渲染实现与性能.md) | program | 2026-10-23 | 每帧渲染流程、着色模式与光照公式、和 Blender Workbench/Eevee/Cycles 对比、CPU/GPU 内存推算、风险和后续优化 |
 | — | [AGENTS.md](AGENTS.md) | 小B | 2026-10-23 | 本文：接手说明和文档索引 |
 
 **规则：** 新的 Markdown 文档一律放进 `docs\`，文件名用下一个两位编号 `NN_标题.md`，并且必须加进上面这张表。只有 `AGENTS.md` 不编号。
