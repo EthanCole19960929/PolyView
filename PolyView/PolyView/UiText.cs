@@ -22,8 +22,6 @@ public static class UiText
         ? "不支持这个文件，请拖入 .obj、.stl、.glb、.gltf、.fbx、.dae 或 three.js .json 模型。"
         : "This file type isn't supported. Use a .obj, .stl, .glb, .gltf, .fbx, .dae or three.js .json model.";
 
-    public static string Idle => Chinese ? "空闲" : "Idle";
-
     public static string Ortho => Chinese ? "正交" : "Orthographic";
 
     public static string Perspective => Chinese ? "透视" : "Perspective";
@@ -31,10 +29,6 @@ public static class UiText
     public static string Ready(string name, int vertices, int triangles) => Chinese
         ? $"{name}    顶点 {vertices:N0}    三角形 {triangles:N0}"
         : $"{name}    Vertices: {vertices:N0}    Triangles: {triangles:N0}";
-
-    public static string Fps(double fps, double frameMs) => fps <= 0
-        ? Idle
-        : Chinese ? $"帧率 {fps:0} FPS（{frameMs:0.0} 毫秒）" : $"{fps:0} FPS ({frameMs:0.0} ms)";
 
     public static string FileFilter => Chinese
         ? "模型文件|*.obj;*.stl;*.glb;*.gltf;*.fbx;*.dae;*.3ds;*.ply;*.json|GLB / glTF|*.glb;*.gltf|FBX|*.fbx|COLLADA (DAE)|*.dae|OBJ|*.obj|STL|*.stl|three.js JSON|*.json|3DS / PLY|*.3ds;*.ply|所有文件|*.*"
