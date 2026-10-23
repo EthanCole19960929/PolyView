@@ -27,8 +27,8 @@ public sealed partial class ModelViewport
         IsHitTestVisible = false,
     };
 
-    readonly List<(int Id, ObjectTransform Old, ObjectTransform New)> _undo = [];
-    readonly List<(int Id, ObjectTransform Old, ObjectTransform New)> _redo = [];
+    readonly List<(int Id, ObjectTransform Old, ObjectTransform New, int Group)> _undo = [];
+    readonly List<(int Id, ObjectTransform Old, ObjectTransform New, int Group)> _redo = [];
     TransformTool _tool = TransformTool.Select;
     int _hoverPart = -1;
     float _gizmoSize = 1f;
@@ -291,9 +291,49 @@ public sealed partial class ModelViewport
         ObjectChanged?.Invoke(this, o.Id);
     }
 
+    int _undoGroupSeq;
+    int _undoGroupDepth;
+    int _undoGroupCurrent;
+    bool _undoAutoGroupOpen;
+
+    /// <summary>Starts an explicit undo group: every PushUndo until the matching EndUndoGroup is one undo/redo step.</summary>
+    public void BeginUndoGroup()
+    {
+        if (_undoGroupDepth++ == 0 && !_undoAutoGroupOpen)
+        {
+            _undoGroupCurrent = ++_undoGroupSeq;
+        }
+    }
+
+    public void EndUndoGroup()
+    {
+        if (_undoGroupDepth > 0)
+        {
+            _undoGroupDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Group id for a new entry. Outside an explicit group, all entries pushed during the same
+    /// synchronous UI operation (one key press, one mouse-up, one menu click, one MCP command)
+    /// share a group that closes when the dispatcher goes idle, so a multi-object action is one step.
+    /// </summary>
+    int CurrentUndoGroup()
+    {
+        if (_undoGroupDepth > 0 || _undoAutoGroupOpen)
+        {
+            return _undoGroupCurrent;
+        }
+
+        _undoGroupCurrent = ++_undoGroupSeq;
+        _undoAutoGroupOpen = true;
+        Dispatcher.BeginInvoke(() => _undoAutoGroupOpen = false, System.Windows.Threading.DispatcherPriority.ContextIdle);
+        return _undoGroupCurrent;
+    }
+
     void PushUndo(int id, ObjectTransform old, ObjectTransform now)
     {
-        _undo.Add((id, old, now));
+        _undo.Add((id, old, now, CurrentUndoGroup()));
         if (_undo.Count > UndoLimit)
         {
             _undo.RemoveAt(0);
@@ -311,52 +351,72 @@ public sealed partial class ModelViewport
 
     public void Redo() => UndoRedo(_redo, _undo, useOld: false);
 
-    void UndoRedo(List<(int Id, ObjectTransform Old, ObjectTransform New)> from, List<(int Id, ObjectTransform Old, ObjectTransform New)> to, bool useOld)
+    void UndoRedo(List<(int Id, ObjectTransform Old, ObjectTransform New, int Group)> from, List<(int Id, ObjectTransform Old, ObjectTransform New, int Group)> to, bool useOld)
     {
+        // Undo/redo closes any auto group so later edits start a new step.
+        _undoAutoGroupOpen = false;
         while (from.Count > 0)
         {
-            var entry = from[^1];
-            from.RemoveAt(from.Count - 1);
-            if (entry.Id < 0)
+            int group = from[^1].Group;
+            bool applied = false;
+            while (from.Count > 0 && from[^1].Group == group)
             {
-                // "Add object" step: undo removes it, redo puts the same object back.
-                int realId = -entry.Id - 1;
-                if (useOld && TryGetObject(realId, out var added))
+                var entry = from[^1];
+                from.RemoveAt(from.Count - 1);
+                if (ApplyUndoEntry(entry, useOld))
                 {
-                    _removedByUndo[realId] = added;
-                    RemoveObject(realId);
                     to.Add(entry);
-                    return;
+                    applied = true;
                 }
-
-                if (!useOld && _removedByUndo.Remove(realId, out var back))
-                {
-                    _objects.Add(back);
-                    if (back.Mesh.Vertices.Length > 0)
-                    {
-                        _renderer?.AddMesh(back.Id, back.Mesh);
-                    }
-
-                    _renderer?.SetWorld(back.Id, back.World);
-                    Select(back.Id);
-                    UpdateSceneBounds();
-                    Invalidate();
-                    SceneChanged?.Invoke(this, EventArgs.Empty);
-                    ViewChanged?.Invoke(this, EventArgs.Empty);
-                    to.Add(entry);
-                    return;
-                }
-
-                continue;
             }
 
-            if (TryGetObject(entry.Id, out var o))
+            if (applied)
             {
-                to.Add(entry);
-                ApplyTransform(o, useOld ? entry.Old : entry.New, commit: true);
                 return;
             }
         }
+    }
+
+    bool ApplyUndoEntry((int Id, ObjectTransform Old, ObjectTransform New, int Group) entry, bool useOld)
+    {
+        if (entry.Id < 0)
+        {
+            // "Add object" step: undo removes it, redo puts the same object back.
+            int realId = -entry.Id - 1;
+            if (useOld && TryGetObject(realId, out var added))
+            {
+                _removedByUndo[realId] = added;
+                RemoveObject(realId);
+                return true;
+            }
+
+            if (!useOld && _removedByUndo.Remove(realId, out var back))
+            {
+                _objects.Add(back);
+                if (back.Mesh.Vertices.Length > 0)
+                {
+                    _renderer?.AddMesh(back.Id, back.Mesh);
+                }
+
+                _renderer?.SetWorld(back.Id, back.World);
+                Select(back.Id);
+                UpdateSceneBounds();
+                Invalidate();
+                SceneChanged?.Invoke(this, EventArgs.Empty);
+                ViewChanged?.Invoke(this, EventArgs.Empty);
+                return true;
+            }
+
+            return false;
+        }
+
+        if (TryGetObject(entry.Id, out var o))
+        {
+            ApplyTransform(o, useOld ? entry.Old : entry.New, commit: true);
+            return true;
+        }
+
+        return false;
     }
 
     static MeshData Recenter(MeshData mesh, out Vector3 center)
