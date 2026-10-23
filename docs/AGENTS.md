@@ -115,16 +115,21 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 
 ## 文件归属
 
-| 谁 | 负责的文件 / 目录 |
+| 谁 | 负责 |
 | --- | --- |
-| 小B | `MeshImporter.cs`、`GltfImporter.cs`、`TextureDecoder.cs`、`MainWindow.xaml(.cs)`、`ModelViewport.cs`、`SceneRenderer.cs`、`OrbitCamera.cs`、`UiText.cs`、`PolyView.csproj`、`Models/`、`samples/`。交接给小U之前由小B负责 |
-| 小U | 交接后负责视口、核心、相机和拾取（`ModelViewport.cs`、`SceneRenderer.cs`、`OrbitCamera.cs` 以及以后的 Core / 拾取代码） |
-| 小I | 只动 `assets/` |
-| 小C | 只做审查，结论写进 `审查.md` |
-| 小M | 以后负责骨骼动画样例 |
-| Ethan | 用户本人，负责测试效果 |
+| program | 唯一写代码的 bot：全部源码（导入、渲染、拾取、手柄、场景列表、灯光、`MainWindow`、`UiText.cs`、`.csproj` 等），统一调度、提交并推送 master |
+| novel | `docs/` 文档内容，只在 program 点名时写，改动交 program 或按 program 安排提交 |
+| english | 界面英文文案校对，意见交给 program，不直接改代码 |
+| PolyView软件开发 | 导入 / 项目相关的建议，只在 program 点名时协助，不直接改代码 |
+| test all | 代码审查意见，只读不提交 |
+| Ethan | 用户本人，提需求、测试效果 |
 
-改别人负责的文件前，先在群里说一声。
+## 协作方式
+
+- 用户只向 program 提需求，由 program 统一调度。
+- 只有 program 写代码并提交 master。
+- 其他 bot（PolyView软件开发、english、novel、test all）仅在 program 点名时协助（文档、文案校对、审查意见），不直接改代码。
+- 每次开工先读 `docs/AGENTS.md` 和 `docs/06_开发进度.md`。
 
 ## Git 规则
 
@@ -135,13 +140,13 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 - 不提交编译产物：`.gitignore` 已忽略 `bin/`、`obj/`、`.vs/`、`*.user`、`/_旧版备份/`。注意 `[Oo]bj/` 也会忽略名叫 `obj` 的模型目录，所以 `Models/` 保持平铺。
 - 本机推送 GitHub 若报 TLS 错误，用 `git -c http.sslBackend=schannel push ...`。
 
-### 共同在 master 开发的防干扰规则
+### 防干扰规则
 
-1. 按文件分工：program 负责渲染 / 手柄 / 场景列表（SceneRenderer、Gizmo、Outliner），PolyView软件开发 负责导入，english 负责 `UiText.cs`，novel 负责 `docs/`。要改别人负责的文件，先在群里说一声。
-2. 只用 `git add <具体文件>`，禁止 `git add .` / `git add -A`，不提交别人改了一半的文件。
-3. 改动前先 `git pull --rebase`；编译通过立刻提交推送，小步提交，不留半成品。
+1. 代码只由 program 修改；其他 bot 有建议发给 program，不直接动源码。
+2. 只用 `git add <具体文件>`，禁止 `git add .` / `git add -A`。
+3. 改动前先 `git pull --rebase`，编译通过后立即提交推送，小步提交，不留半成品。
 4. 编译不过不推，禁止 `--force`。
-5. 公共文件（`MainWindow.xaml`、`.csproj`、`.slnx`）同一时间只允许一人修改，改前先在群里认领。
+5. novel 改 `docs/` 时也要经 program 安排，避免与代码提交撞车。
 
 ## 当前进度（2026-10-23）
 
