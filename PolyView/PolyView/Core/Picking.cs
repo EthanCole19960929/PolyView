@@ -76,30 +76,25 @@ public static class Picking
     }
 
     /// <summary>
-    /// 在若干对象里找最近命中。world 是所有对象共用的世界变换（目前只有缩放滑块），
-    /// 射线先变回模型空间再测，避免逐顶点变换。
+    /// 在若干对象里找最近命中。每个对象用自己的 World（再乘共用的 sceneWorld），
+    /// 射线变回该对象的模型空间再测，避免逐顶点变换。
     /// </summary>
-    public static PickHit Pick(in PickRay worldRay, IReadOnlyList<SceneObject> objects, in Matrix4x4 world)
+    public static PickHit Pick(in PickRay worldRay, IReadOnlyList<SceneObject> objects, in Matrix4x4 sceneWorld)
     {
-        if (!Matrix4x4.Invert(world, out var inverseWorld))
-        {
-            return PickHit.None;
-        }
-
-        var origin = Vector3.Transform(worldRay.Origin, inverseWorld);
-        var direction = Vector3.TransformNormal(worldRay.Direction, inverseWorld);
-        // 不归一化：模型空间的 t 与世界空间 t 一致，可直接跨对象比较远近。
-        var ray = new PickRay(origin, direction);
         var best = PickHit.None;
         for (int o = 0; o < objects.Count; o++)
         {
             var obj = objects[o];
-            if (!obj.Visible)
+            if (!obj.Visible || !Matrix4x4.Invert(obj.World * sceneWorld, out var inverseWorld))
             {
                 continue;
             }
 
-            if (!RayAabb(ray, obj.Min, obj.Max, out float enter) || enter > best.Distance)
+            // 方向不归一化：模型空间的 t 与世界空间 t 一致，可直接跨对象比较远近。
+            var ray = new PickRay(
+                Vector3.Transform(worldRay.Origin, inverseWorld),
+                Vector3.TransformNormal(worldRay.Direction, inverseWorld));
+            if (!RayAabb(ray, obj.LocalMin, obj.LocalMax, out float enter) || enter > best.Distance)
             {
                 continue;
             }

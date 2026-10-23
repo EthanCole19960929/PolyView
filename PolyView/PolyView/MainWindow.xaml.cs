@@ -42,6 +42,7 @@ public partial class MainWindow : Window
         LanguageButton.Content = UiText.Language;
         HintText.Text = UiText.Hint;
         Outliner.ApplyLanguage();
+        Viewport.ApplyToolbarLanguage();
         UpdateStatus();
         UpdateProjection();
     }

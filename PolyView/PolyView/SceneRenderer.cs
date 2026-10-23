@@ -53,7 +53,18 @@ public sealed class SceneRenderer : IDisposable
         {
             if (Unlit > 0.5)
             {
-                return input.Color;
+                // 无光照（地面网格 / 变换手柄）。Highlight > 0 往黄色高亮，< 0 变暗。
+                float4 flat = input.Color;
+                if (Highlight > 0)
+                {
+                    flat.rgb = lerp(flat.rgb, float3(1.0, 0.824, 0.29), Highlight);
+                }
+                else
+                {
+                    flat.rgb *= 1 + Highlight;
+                }
+
+                return flat;
             }
 
             float3 normal = normalize(input.Normal);
@@ -80,6 +91,13 @@ public sealed class SceneRenderer : IDisposable
     readonly ID3D11InputLayout _layout;
     readonly ID3D11Buffer _constants;
     readonly ID3D11DepthStencilState _depthState;
+    readonly ID3D11DepthStencilState _noDepthState;
+    readonly ID3D11Buffer _gizmoVertices;
+    readonly Gizmo.Range[] _gizmoRanges;
+    TransformTool _gizmoTool;
+    Matrix4x4 _gizmoWorld;
+    int _gizmoHover = -1;
+    int _gizmoActive = -1;
     readonly ID3D11RasterizerState _rasterizer;
     readonly ID3D11RasterizerState _wireRasterizer;
     readonly ID3D11RasterizerState _doubleSidedRasterizer;
@@ -139,6 +157,9 @@ public sealed class SceneRenderer : IDisposable
             ResourceUsage.Dynamic,
             CpuAccessFlags.Write);
         _depthState = device.CreateDepthStencilState(DepthStencilDescription.Default);
+        // 手柄：关深度测试和写入，永远画在模型之上。
+        _noDepthState = device.CreateDepthStencilState(DepthStencilDescription.None);
+        _gizmoVertices = device.CreateBuffer(Gizmo.Build(out _gizmoRanges), BindFlags.VertexBuffer);
         var solid = new RasterizerDescription(CullMode.Back, FillMode.Solid)
         {
             FrontCounterClockwise = true,
@@ -217,6 +238,87 @@ public sealed class SceneRenderer : IDisposable
         }
 
         _objects.Add(gpu);
+    }
+
+    /// <summary>设置对象的世界矩阵（变换只改矩阵，不重建顶点缓冲）。</summary>
+    public void SetWorld(int id, in Matrix4x4 world)
+    {
+        for (int i = 0; i < _objects.Count; i++)
+        {
+            if (_objects[i].Id == id)
+            {
+                _objects[i].World = world;
+            }
+        }
+    }
+
+    /// <summary>按部件隐藏（节点可见性）；null = 全部显示。</summary>
+    public void SetPartHidden(int id, bool[]? hidden)
+    {
+        for (int i = 0; i < _objects.Count; i++)
+        {
+            if (_objects[i].Id == id)
+            {
+                _objects[i].PartHidden = hidden;
+            }
+        }
+    }
+
+    /// <summary>按部件高亮（选中节点）；null = 选中对象时全部高亮。</summary>
+    public void SetPartHighlight(int id, bool[]? highlight)
+    {
+        for (int i = 0; i < _objects.Count; i++)
+        {
+            if (_objects[i].Id == id)
+            {
+                _objects[i].PartHighlight = highlight;
+            }
+        }
+    }
+
+    /// <summary>设置变换手柄：tool = Select 表示不画。world = Scale(屏幕恒定尺寸) * Translation(中心)。</summary>
+    public void SetGizmo(TransformTool tool, in Matrix4x4 world, int hoverPart, int activePart)
+    {
+        _gizmoTool = tool;
+        _gizmoWorld = world;
+        _gizmoHover = hoverPart;
+        _gizmoActive = activePart;
+    }
+
+    void DrawGizmo(in Matrix4x4 viewProjection, Vector3 light)
+    {
+        if (_gizmoTool == TransformTool.Select)
+        {
+            return;
+        }
+
+        _context.OMSetDepthStencilState(_noDepthState, 0);
+        _context.RSSetState(_doubleSidedRasterizer);
+        _vertexSlot[0] = _gizmoVertices;
+        _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
+        _textureSlot[0] = _whiteView;
+        _context.PSSetShaderResources(0, 1, _textureSlot);
+        int tool = (int)_gizmoTool - 1;
+        for (int part = 0; part < Gizmo.PartCount; part++)
+        {
+            var range = _gizmoRanges[tool * Gizmo.PartCount + part];
+            float highlight = part == _gizmoActive || (_gizmoActive < 0 && part == _gizmoHover) ? 1f
+                : _gizmoActive >= 0 ? -0.5f : 0f;
+            WriteConstants(_gizmoWorld, viewProjection, light, unlit: true, highlight);
+            if (range.LineCount > 0)
+            {
+                _context.IASetPrimitiveTopology(PrimitiveTopology.LineList);
+                _context.Draw((uint)range.LineCount, (uint)range.LineStart);
+            }
+
+            if (range.TriCount > 0)
+            {
+                _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+                _context.Draw((uint)range.TriCount, (uint)range.TriStart);
+            }
+        }
+
+        _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
     }
 
     /// <summary>显示 / 隐藏一个对象（不释放资源）。</summary>
@@ -403,7 +505,7 @@ public sealed class SceneRenderer : IDisposable
         _offset[0] = 0;
         if (ShowGrid && _gridVertices != null)
         {
-            WriteConstants(Matrix4x4.Identity, viewProjection, light, unlit: true, highlight: false);
+            WriteConstants(Matrix4x4.Identity, viewProjection, light, unlit: true, highlight: 0f);
             _context.RSSetState(_doubleSidedRasterizer);
             _context.IASetPrimitiveTopology(PrimitiveTopology.LineList);
             _vertexSlot[0] = _gridVertices;
@@ -416,7 +518,7 @@ public sealed class SceneRenderer : IDisposable
 
         _samplerSlot[0] = _sampler;
         _context.PSSetSamplers(0, 1, _samplerSlot);
-        var world = Matrix4x4.CreateScale(scale);
+        var sceneWorld = Matrix4x4.CreateScale(scale);
         // for 循环 + 预分配的槽数组：渲染循环里不产生托管分配。
         for (int o = 0; o < _objects.Count; o++)
         {
@@ -426,7 +528,9 @@ public sealed class SceneRenderer : IDisposable
                 continue;
             }
 
-            WriteConstants(world, viewProjection, light, unlit: false, highlight: gpu.Id == SelectedId);
+            bool selected = gpu.Id == SelectedId;
+            var objectWorld = gpu.World * sceneWorld;
+            float written = -1f;
             _vertexSlot[0] = gpu.Vertices;
             _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
             _context.IASetIndexBuffer(gpu.Indices, Format.R32_UInt, 0);
@@ -434,9 +538,18 @@ public sealed class SceneRenderer : IDisposable
             for (int p = 0; p < parts.Length; p++)
             {
                 var part = parts[p];
-                if (part.IndexCount <= 0 || part.StartIndex + part.IndexCount > gpu.IndexCount)
+                if (part.IndexCount <= 0 || part.StartIndex + part.IndexCount > gpu.IndexCount
+                    || (gpu.PartHidden != null && p < gpu.PartHidden.Length && gpu.PartHidden[p]))
                 {
                     continue;
+                }
+
+                // 选中整个对象时全部高亮；选中某个节点时只高亮该节点（含子节点）的部件。
+                float highlight = selected && (gpu.PartHighlight == null || (p < gpu.PartHighlight.Length && gpu.PartHighlight[p])) ? 1f : 0f;
+                if (highlight != written)
+                {
+                    WriteConstants(objectWorld, viewProjection, light, unlit: false, highlight);
+                    written = highlight;
                 }
 
                 _context.RSSetState(part.DoubleSided
@@ -450,11 +563,12 @@ public sealed class SceneRenderer : IDisposable
             }
         }
 
+        DrawGizmo(viewProjection, light);
         _context.Flush();
     }
 
     /// <summary>直接写进映射的常量缓冲，不经过 Marshal.StructureToPtr（它会装箱，每帧产生垃圾）。</summary>
-    unsafe void WriteConstants(in Matrix4x4 world, in Matrix4x4 viewProjection, Vector3 light, bool unlit, bool highlight)
+    unsafe void WriteConstants(in Matrix4x4 world, in Matrix4x4 viewProjection, Vector3 light, bool unlit, float highlight)
     {
         Matrix4x4.Invert(world, out var inverseWorld);
         var mapped = _context.Map(_constants, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
@@ -465,7 +579,7 @@ public sealed class SceneRenderer : IDisposable
         constants->NormalWorld = Matrix4x4.Transpose(inverseWorld);
         constants->LightDirection = light;
         constants->Unlit = unlit ? 1f : 0f;
-        constants->Highlight = highlight ? 1f : 0f;
+        constants->Highlight = highlight;
         constants->Padding = Vector3.Zero;
         _context.Unmap(_constants, 0);
     }
@@ -515,6 +629,8 @@ public sealed class SceneRenderer : IDisposable
         _vertexShader.Dispose();
         _pixelShader.Dispose();
         _depthState.Dispose();
+        _noDepthState.Dispose();
+        _gizmoVertices.Dispose();
         _rasterizer.Dispose();
         _wireRasterizer.Dispose();
         _doubleSidedRasterizer.Dispose();
@@ -635,6 +751,9 @@ public sealed class SceneRenderer : IDisposable
         public required ID3D11Buffer Indices;
         public int IndexCount;
         public bool Visible = true;
+        public Matrix4x4 World = Matrix4x4.Identity;
+        public bool[]? PartHidden;
+        public bool[]? PartHighlight;
         public MeshPart[] Parts = [];
         public readonly List<(ID3D11Texture2D Texture, ID3D11ShaderResourceView View)> Textures = [];
 

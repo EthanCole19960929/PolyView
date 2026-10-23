@@ -11,7 +11,7 @@ using Vortice.DXGI;
 
 namespace PolyView;
 
-public sealed class ModelViewport : UserControl
+public sealed partial class ModelViewport : UserControl
 {
     readonly Image _image = new() { Stretch = Stretch.Fill };
     readonly D3DImage _d3dImage = new();
@@ -98,7 +98,7 @@ public sealed class ModelViewport : UserControl
     public ModelViewport()
     {
         _image.Source = _d3dImage;
-        Content = _image;
+        Content = BuildOverlay(_image);
         Focusable = true;
         Background = new SolidColorBrush(Color.FromRgb(28, 31, 36));
         Loaded += OnLoaded;
@@ -142,6 +142,8 @@ public sealed class ModelViewport : UserControl
     /// <summary>选中指定对象（-1 或不存在的 id 视为取消选择），变化时触发 SelectionChanged。</summary>
     public void Select(int id)
     {
+        CancelTransform();
+
         if (!TryGetObject(id, out _))
         {
             id = -1;
@@ -153,6 +155,12 @@ public sealed class ModelViewport : UserControl
         }
 
         _selectedId = id;
+        _selectedNode = -1;
+        if (_renderer != null)
+        {
+            _renderer.SetPartHighlight(id, null);
+        }
+
         if (_renderer != null)
         {
             _renderer.SelectedId = id;
@@ -179,9 +187,6 @@ public sealed class ModelViewport : UserControl
 
     /// <summary>对象属性（可见性 / 变换）变化，参数为对象 id。</summary>
     public event EventHandler<int>? ObjectChanged;
-
-    /// <summary>属性栏用的变换文本；没有变换功能前返回空字符串。</summary>
-    public string GetObjectTransformText(int id) => "";
 
     /// <summary>显示 / 隐藏对象：只影响显示和拾取，不删除。</summary>
     public void SetObjectVisible(int id, bool visible)
@@ -384,6 +389,11 @@ public sealed class ModelViewport : UserControl
     /// <summary>Blender 风格快捷键。返回 true 表示已处理。</summary>
     public bool HandleKey(Key key, ModifierKeys modifiers)
     {
+        if (TransformHandleKey(key, modifiers))
+        {
+            return true;
+        }
+
         bool ctrl = (modifiers & ModifierKeys.Control) != 0;
         if (key == Key.Z && modifiers == ModifierKeys.Shift)
         {
@@ -463,6 +473,8 @@ public sealed class ModelViewport : UserControl
             Select(-1);
         }
 
+        // 顶点平移到以包围盒中心为原点，Position = 原中心：渲染结果不变，旋转 / 缩放围绕对象中心。
+        mesh = Recenter(mesh, out var center);
         var obj = new SceneObject
         {
             Id = _nextId++,
@@ -470,9 +482,11 @@ public sealed class ModelViewport : UserControl
             SourcePath = path,
             Mesh = mesh,
         };
+        obj.Transform.Position = center;
         _objects.Add(obj);
         var watch = System.Diagnostics.Stopwatch.StartNew();
         _renderer?.AddMesh(obj.Id, mesh);
+        _renderer?.SetWorld(obj.Id, obj.World);
         LastUploadMilliseconds = _renderer == null ? 0 : watch.Elapsed.TotalMilliseconds;
         UpdateSceneBounds();
         bool ortho = _camera.Orthographic;
@@ -511,6 +525,7 @@ public sealed class ModelViewport : UserControl
                 {
                     _renderer.AddMesh(o.Id, o.Mesh);
                     _renderer.SetVisible(o.Id, o.Visible);
+                    _renderer.SetWorld(o.Id, o.World);
                 }
 
                 LastUploadMilliseconds = watch.Elapsed.TotalMilliseconds;
@@ -584,6 +599,7 @@ public sealed class ModelViewport : UserControl
 
     void RenderFrame()
     {
+        UpdateGizmo();
         _renderer!.Render(_camera, _scale, SceneRadius);
     }
 
@@ -633,6 +649,11 @@ public sealed class ModelViewport : UserControl
 
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
+        if (TransformMouseDown(e))
+        {
+            return;
+        }
+
         Focus();
         if (e.ChangedButton == MouseButton.Middle)
         {
@@ -662,6 +683,11 @@ public sealed class ModelViewport : UserControl
 
     protected override void OnMouseUp(MouseButtonEventArgs e)
     {
+        if (TransformMouseUp(e))
+        {
+            return;
+        }
+
         if (_drag != DragMode.None && e.ChangedButton == _dragButton)
         {
             _drag = DragMode.None;
@@ -696,6 +722,11 @@ public sealed class ModelViewport : UserControl
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
+        if (TransformMouseMove(e))
+        {
+            return;
+        }
+
         if (_drag == DragMode.None)
         {
             return;
