@@ -37,9 +37,32 @@ public partial class MainWindow : Window
     void ApplyLanguage()
     {
         Title = UiText.WindowTitle;
-        OpenButton.Content = UiText.Open;
-        ResetButton.Content = UiText.Reset;
-        LanguageButton.Content = UiText.Language;
+        MenuFile.Header = UiText.MenuFile;
+        MenuNew.Header = UiText.MenuNew;
+        MenuOpen.Header = UiText.MenuOpen;
+        MenuRecent.Header = UiText.MenuRecent;
+        MenuSave.Header = UiText.MenuSave;
+        MenuImport.Header = UiText.MenuImport;
+        MenuExport.Header = UiText.MenuExport;
+        MenuQuit.Header = UiText.MenuQuit;
+        MenuEdit.Header = UiText.MenuEdit;
+        MenuUndo.Header = UiText.MenuUndo;
+        MenuRedo.Header = UiText.MenuRedo;
+        MenuResetView.Header = UiText.Reset;
+        MenuLanguage.Header = UiText.MenuLanguage;
+        MenuPreferences.Header = UiText.MenuPreferences;
+        MenuRender.Header = UiText.MenuRender;
+        MenuRenderImage.Header = UiText.MenuRenderImage;
+        MenuRenderAnimation.Header = UiText.MenuRenderAnimation;
+        MenuViewRender.Header = UiText.MenuViewRender;
+        MenuWindow.Header = UiText.MenuWindow;
+        MenuNewWindow.Header = UiText.MenuNewWindow;
+        MenuFullscreen.Header = UiText.MenuFullscreen;
+        MenuProjection.Header = UiText.MenuProjection;
+        MenuHelp.Header = UiText.MenuHelp;
+        MenuManual.Header = UiText.MenuManual;
+        MenuAbout.Header = UiText.MenuAbout;
+        BuildWorkspaceTabs();
         HintText.Text = UiText.Hint;
         Outliner.ApplyLanguage();
         Viewport.ApplyToolbarLanguage();
@@ -47,10 +70,68 @@ public partial class MainWindow : Window
         UpdateProjection();
     }
 
+    /// <summary>Blender workspace tabs: only Layout exists; the rest are shown greyed out.</summary>
+    void BuildWorkspaceTabs()
+    {
+        WorkspaceTabs.Children.Clear();
+        var names = UiText.Workspaces;
+        for (int i = 0; i < names.Length; i++)
+        {
+            bool active = i == 0;
+            WorkspaceTabs.Children.Add(new System.Windows.Controls.Border
+            {
+                Style = (Style)FindResource("WorkspaceTab"),
+                Background = active ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x47, 0x47, 0x47)) : System.Windows.Media.Brushes.Transparent,
+                IsEnabled = active,
+                Child = new System.Windows.Controls.TextBlock
+                {
+                    Text = names[i],
+                    FontSize = 12,
+                    Foreground = active
+                        ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE6, 0xE6, 0xE6))
+                        : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6E, 0x6E, 0x6E)),
+                },
+            });
+        }
+    }
+
     void UpdateProjection()
     {
-        ProjectionText.Text = Viewport.Orthographic ? UiText.Ortho : UiText.Perspective;
+        ProjectionText.Text = Viewport.Orthographic ? UiText.ViewOrtho : UiText.ViewPerspective;
     }
+
+    void MenuQuit_Click(object sender, RoutedEventArgs e) => Close();
+
+    void MenuUndo_Click(object sender, RoutedEventArgs e) => Viewport.Undo();
+
+    void MenuRedo_Click(object sender, RoutedEventArgs e) => Viewport.Redo();
+
+    void MenuProjection_Click(object sender, RoutedEventArgs e)
+    {
+        Viewport.HandleKey(Key.NumPad5, ModifierKeys.None);
+        UpdateProjection();
+    }
+
+    WindowState _stateBeforeFullscreen = WindowState.Normal;
+
+    void MenuFullscreen_Click(object sender, RoutedEventArgs e)
+    {
+        if (WindowStyle == WindowStyle.None)
+        {
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            WindowState = _stateBeforeFullscreen;
+        }
+        else
+        {
+            _stateBeforeFullscreen = WindowState;
+            WindowStyle = WindowStyle.None;
+            WindowState = WindowState.Normal;
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    void MenuAbout_Click(object sender, RoutedEventArgs e) =>
+        MessageBox.Show(this, UiText.AboutText, UiText.MenuAbout, MessageBoxButton.OK, MessageBoxImage.Information);
 
     void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -61,6 +142,27 @@ public partial class MainWindow : Window
 
         // Alt 组合键时 WPF 给的是 Key.System，真实按键在 SystemKey 里。
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (Keyboard.Modifiers == ModifierKeys.Control && key == Key.O)
+        {
+            OpenButton_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.Control && key == Key.Q)
+        {
+            Close();
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && key == Key.Space)
+        {
+            MenuFullscreen_Click(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
+
         if (Viewport.HandleKey(key, Keyboard.Modifiers))
         {
             e.Handled = true;

@@ -86,4 +86,34 @@ public static class UiText
     public static string TipRotate => Chinese ? "旋转选中元素。" : "Rotate selected items.";
     public static string TipScale => Chinese ? "缩放选中元素。" : "Scale (resize) selected items.";
     public static string Shortcut => Chinese ? "快捷键" : "Shortcut";
+    public static string MenuFile => Chinese ? "文件" : "File";
+    public static string MenuEdit => Chinese ? "编辑" : "Edit";
+    public static string MenuRender => Chinese ? "渲染" : "Render";
+    public static string MenuWindow => Chinese ? "窗口" : "Window";
+    public static string MenuHelp => Chinese ? "帮助" : "Help";
+    public static string MenuNew => Chinese ? "新建" : "New";
+    public static string MenuOpen => Chinese ? "打开..." : "Open...";
+    public static string MenuRecent => Chinese ? "打开最近" : "Open Recent";
+    public static string MenuSave => Chinese ? "保存" : "Save";
+    public static string MenuImport => Chinese ? "导入" : "Import";
+    public static string MenuExport => Chinese ? "导出" : "Export";
+    public static string MenuQuit => Chinese ? "退出" : "Quit";
+    public static string MenuUndo => Chinese ? "撤销" : "Undo";
+    public static string MenuRedo => Chinese ? "重做" : "Redo";
+    public static string MenuPreferences => Chinese ? "偏好设置..." : "Preferences...";
+    public static string MenuLanguage => Chinese ? "界面语言: English" : "Language: 中文";
+    public static string MenuRenderImage => Chinese ? "渲染图像" : "Render Image";
+    public static string MenuRenderAnimation => Chinese ? "渲染动画" : "Render Animation";
+    public static string MenuViewRender => Chinese ? "查看渲染" : "View Render";
+    public static string MenuNewWindow => Chinese ? "新建窗口" : "New Window";
+    public static string MenuFullscreen => Chinese ? "切换窗口全屏" : "Toggle Window Fullscreen";
+    public static string MenuProjection => Chinese ? "切换透视 / 正交" : "Toggle Perspective / Orthographic";
+    public static string MenuManual => Chinese ? "手册" : "Manual";
+    public static string MenuAbout => Chinese ? "关于 PolyView" : "About PolyView";
+    public static string AboutText => Chinese ? "PolyView 三维查看器\n仿照 Blender 的操作和界面。" : "PolyView 3D viewer\nControls and layout modeled on Blender.";
+    public static string ViewPerspective => Chinese ? "用户透视" : "User Perspective";
+    public static string ViewOrtho => Chinese ? "用户正交" : "User Orthographic";
+    public static string[] Workspaces => Chinese
+        ? ["布局", "建模", "雕刻", "UV 编辑", "纹理绘制", "着色", "动画", "渲染", "合成"]
+        : ["Layout", "Modeling", "Sculpting", "UV Editing", "Texture Paint", "Shading", "Animation", "Rendering", "Compositing"];
 }
