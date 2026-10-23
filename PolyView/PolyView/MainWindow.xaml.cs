@@ -38,7 +38,6 @@ public partial class MainWindow : Window
         OpenButton.Content = UiText.Open;
         ResetButton.Content = UiText.Reset;
         LanguageButton.Content = UiText.Language;
-        ScaleLabel.Text = UiText.Scale;
         HintText.Text = UiText.Hint;
         UpdateStatus();
         UpdateFps();
@@ -101,14 +100,12 @@ public partial class MainWindow : Window
         var dialog = new OpenFileDialog { Filter = UiText.FileFilter };
         if (dialog.ShowDialog(this) == true)
         {
-            ResetSliders();
             Viewport.LoadPath(dialog.FileName);
         }
     }
 
     void ResetButton_Click(object sender, RoutedEventArgs e)
     {
-        ResetSliders();
         Viewport.ResetView();
     }
 
@@ -116,16 +113,6 @@ public partial class MainWindow : Window
     {
         UiText.Chinese = !UiText.Chinese;
         ApplyLanguage();
-    }
-
-    void ScaleSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (!IsLoaded)
-        {
-            return;
-        }
-
-        Viewport.SetScale((float)ScaleSlider.Value);
     }
 
     void ShowNotice(string text)
@@ -162,14 +149,8 @@ public partial class MainWindow : Window
         }
 
         _notice = null;
-        ResetSliders();
         Viewport.LoadPath(path);
         Activate();
-    }
-
-    void ResetSliders()
-    {
-        ScaleSlider.Value = 1;
     }
 
     static bool HasModelFile(DragEventArgs e) => FirstModelFile(e) != null;

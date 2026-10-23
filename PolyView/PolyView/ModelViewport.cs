@@ -381,7 +381,7 @@ public sealed class ModelViewport : UserControl
         _device9 = _d3d9.CreateDeviceEx(0, D3D9.DeviceType.Hardware, IntPtr.Zero, flags, parameters);
     }
 
-    // ---- 鼠标：Blender 风格。中键环绕，Shift+中键平移，Ctrl+中键缩放；左键拖动也能环绕（没有中键时用）。----
+    // ---- 鼠标：Blender 风格。中键环绕，Shift+中键平移，Ctrl+中键缩放；Alt+左键也能环绕（没有中键时用），普通左键留给选择。----
 
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
@@ -394,9 +394,10 @@ public sealed class ModelViewport : UserControl
                 : DragMode.Orbit;
             BeginDrag(mode, MouseButton.Middle, e);
         }
-        else if (e.ChangedButton == MouseButton.Left && _drag == DragMode.None)
+        else if (e.ChangedButton == MouseButton.Left && _drag == DragMode.None && (Keyboard.Modifiers & ModifierKeys.Alt) != 0)
         {
-            BeginDrag(DragMode.Orbit, MouseButton.Left, e);
+            // 没有中键时的备用：Alt+左键环绕，Alt+Shift+左键平移；普通左键留给选择 / 变换手柄
+            BeginDrag((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? DragMode.Pan : DragMode.Orbit, MouseButton.Left, e);
         }
         else
         {
