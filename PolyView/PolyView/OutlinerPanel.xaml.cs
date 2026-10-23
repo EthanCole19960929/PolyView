@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Numerics;
@@ -188,7 +188,7 @@ public partial class OutlinerPanel : UserControl
         {
             SceneNodeKind.Mesh => UiText.KindMesh,
             SceneNodeKind.Camera => UiText.KindCamera,
-            SceneNodeKind.Light => UiText.KindLight,
+            SceneNodeKind.Light => node.Light != null ? ModelViewport.LightTypeName(node.Light.Type) : UiText.KindLight,
             _ => UiText.KindEmpty,
         };
     }
@@ -371,7 +371,7 @@ public partial class OutlinerPanel : UserControl
             if (_viewport.SelectedNode < nodes.Count)
             {
                 var node = nodes[_viewport.SelectedNode];
-                text += $"\n\n{NodeName(node)}  [{node.Kind}]";
+                text += $"\n\n{NodeName(node)}  [{(node.Light != null ? ModelViewport.LightTypeName(node.Light.Type) : node.Kind.ToString())}]";
             }
         }
 

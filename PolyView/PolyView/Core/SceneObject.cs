@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 
 namespace PolyView;
 
@@ -9,6 +9,9 @@ public sealed class SceneObject
     public required string Name { get; init; }
     public string? SourcePath { get; init; }
     public required MeshData Mesh { get; init; }
+
+    /// <summary>Center subtracted from the vertices at import (node / light matrices are still in file space).</summary>
+    public Vector3 ImportOffset { get; init; }
 
     /// <summary>只影响显示和拾取，不删除对象。</summary>
     public bool Visible { get; set; } = true;

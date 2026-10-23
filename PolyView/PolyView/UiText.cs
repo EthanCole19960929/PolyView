@@ -86,6 +86,12 @@ public static class UiText
     public static string TipRotate => Chinese ? "旋转选中元素。" : "Rotate selected items.";
     public static string TipScale => Chinese ? "缩放选中元素。" : "Scale (resize) selected items.";
     public static string Shortcut => Chinese ? "快捷键" : "Shortcut";
+    public static string AddTitle => Chinese ? "添加" : "Add";
+    public static string AddMesh => Chinese ? "网格" : "Mesh";
+    public static string AddCurve => Chinese ? "曲线" : "Curve";
+    public static string AddEmpty => Chinese ? "空物体" : "Empty";
+    public static string AddLight => Chinese ? "灯光" : "Light";
+    public static string AddCamera => Chinese ? "摄像机" : "Camera";
     public static string MenuFile => Chinese ? "文件" : "File";
     public static string MenuEdit => Chinese ? "编辑" : "Edit";
     public static string MenuRender => Chinese ? "渲染" : "Render";

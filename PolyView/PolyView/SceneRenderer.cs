@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.InteropServices;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -17,7 +17,23 @@ public sealed class SceneRenderer : IDisposable
             float3 LightDirection;
             float Unlit;
             float Highlight;
-            float3 Padding;
+            float3 EyePosition;
+            float4x4 World;
+        };
+
+        struct LightItem
+        {
+            float4 PositionType;   // xyz world position, w type: 1 sun, 2 point, 3 spot, 4 area
+            float4 DirectionRange; // xyz emission direction (local -Z), w range (0 = infinite)
+            float4 ColorPower;     // rgb color * radiance scale, w radius
+            float4 Cone;           // x cos(inner), y cos(outer)
+        };
+
+        cbuffer Lights : register(b1)
+        {
+            float4 Ambient;        // rgb World color * strength, w 1 = use scene lights
+            float4 LightCount;
+            LightItem Items[16];
         };
 
         Texture2D BaseColorMap : register(t0);
@@ -37,6 +53,7 @@ public sealed class SceneRenderer : IDisposable
             float3 Normal : TEXCOORD0;
             float2 TexCoord : TEXCOORD1;
             float4 Color : COLOR0;
+            float3 WorldPos : TEXCOORD2;
         };
 
         // 选中描边：先把选中对象画进 R8 掩码，再全屏找掩码边缘（2 像素外扩），Blender 活动物体色 #FFA028。
@@ -85,6 +102,7 @@ public sealed class SceneRenderer : IDisposable
             output.Normal = mul((float3x3)NormalWorld, input.Normal);
             output.TexCoord = input.TexCoord;
             output.Color = input.Color;
+            output.WorldPos = mul(World, float4(input.Position, 1)).xyz;
             return output;
         }
 
@@ -113,6 +131,59 @@ public sealed class SceneRenderer : IDisposable
             }
 
             // 主光跟着相机（右上方斜照），再加天空 / 地面半球环境光，背光面也不会比背景还黑。
+            if (Ambient.w > 0.5)
+            {
+                // Scene lights (docs/07 §4.2): Lambert + small Blinn-Phong, inverse-square falloff, no shadows.
+                float4 baseColor = BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
+                float3 viewDir = normalize(EyePosition - input.WorldPos);
+                float3 sum = baseColor.rgb * Ambient.rgb;
+                int count = (int)LightCount.x;
+                for (int i = 0; i < count; i++)
+                {
+                    LightItem li = Items[i];
+                    int type = (int)li.PositionType.w;
+                    float3 L;
+                    float3 radiance;
+                    if (type == 1)
+                    {
+                        L = -li.DirectionRange.xyz;
+                        radiance = li.ColorPower.rgb;
+                    }
+                    else
+                    {
+                        float3 d = li.PositionType.xyz - input.WorldPos;
+                        float dist2 = max(dot(d, d), 1e-4);
+                        float dist = sqrt(dist2);
+                        L = d / dist;
+                        float atten = 1.0 / dist2;
+                        float range = li.DirectionRange.w;
+                        if (range > 0)
+                        {
+                            float fade = saturate(1 - pow(dist / range, 4));
+                            atten *= fade * fade;
+                        }
+
+                        if (type == 3)
+                        {
+                            atten *= smoothstep(li.Cone.y, li.Cone.x, dot(-L, li.DirectionRange.xyz));
+                        }
+                        else if (type == 4)
+                        {
+                            atten *= saturate(dot(li.DirectionRange.xyz, -L));
+                        }
+
+                        radiance = li.ColorPower.rgb * atten;
+                    }
+
+                    float ndl = saturate(dot(normal, L));
+                    float spec = pow(saturate(dot(normal, normalize(L + viewDir))), 48) * 0.15;
+                    sum += (baseColor.rgb + spec) * radiance * ndl;
+                }
+
+                // Soft exposure curve so 1000 W lights do not clip hard.
+                return float4(1 - exp(-sum), 1);
+            }
+
             float key = saturate(dot(normal, LightDirection));
             float hemisphere = lerp(0.32, 0.55, normal.y * 0.5 + 0.5);
             float4 albedo = BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
@@ -127,6 +198,13 @@ public sealed class SceneRenderer : IDisposable
     readonly ID3D11PixelShader _pixelShader;
     readonly ID3D11InputLayout _layout;
     readonly ID3D11Buffer _constants;
+    readonly ID3D11Buffer _lightConstants;
+    readonly ID3D11Buffer _iconVertexBuffer;
+    const int IconCapacity = 1 << 16;
+    Vertex[]? _icons;
+    int _iconCount;
+    readonly ID3D11Buffer[] _lightSlot = new ID3D11Buffer[1];
+    public const int MaxLights = 16;
     readonly ID3D11DepthStencilState _depthState;
     readonly ID3D11DepthStencilState _noDepthState;
     readonly ID3D11DepthStencilState _gridDepthState;
@@ -140,6 +218,7 @@ public sealed class SceneRenderer : IDisposable
     ID3D11RenderTargetView? _maskView;
     ID3D11ShaderResourceView? _maskResource;
     Matrix4x4 _lastViewProjection;
+    Vector3 _eye;
     Vector3 _lastLight;
     Vector3 _lastScale = Vector3.One;
     readonly ID3D11Buffer _gizmoVertices;
@@ -210,6 +289,16 @@ public sealed class SceneRenderer : IDisposable
             BindFlags.ConstantBuffer,
             ResourceUsage.Dynamic,
             CpuAccessFlags.Write);
+        _lightConstants = device.CreateBuffer(
+            (uint)(32 + MaxLights * Marshal.SizeOf<LightData>()),
+            BindFlags.ConstantBuffer,
+            ResourceUsage.Dynamic,
+            CpuAccessFlags.Write);
+        _iconVertexBuffer = device.CreateBuffer(
+            (uint)(IconCapacity * Marshal.SizeOf<Vertex>()),
+            BindFlags.VertexBuffer,
+            ResourceUsage.Dynamic,
+            CpuAccessFlags.Write);
         _depthState = device.CreateDepthStencilState(DepthStencilDescription.Default);
         // 手柄：关深度测试和写入，永远画在模型之上。
         _noDepthState = device.CreateDepthStencilState(DepthStencilDescription.None);
@@ -273,10 +362,67 @@ public sealed class SceneRenderer : IDisposable
         throw new InvalidOperationException(error);
     }
 
+    /// <summary>Scene lights for the shader (docs/07). useSceneLights = false keeps the default viewport light.</summary>
+    public unsafe void SetLights(LightData[] lights, int count, Vector3 ambient, bool useSceneLights)
+    {
+        count = Math.Clamp(count, 0, MaxLights);
+        var mapped = _context.Map(_lightConstants, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
+        var header = (Vector4*)mapped.DataPointer;
+        header[0] = new Vector4(ambient, useSceneLights ? 1f : 0f);
+        header[1] = new Vector4(count, 0, 0, 0);
+        var items = (LightData*)(header + 2);
+        for (int i = 0; i < count; i++)
+        {
+            items[i] = lights[i];
+        }
+
+        _context.Unmap(_lightConstants, 0);
+    }
+
+    /// <summary>Viewport light icons (line list, world space). The array is read during Render.</summary>
+    public void SetLightIcons(Vertex[] vertices, int count)
+    {
+        _icons = vertices;
+        _iconCount = Math.Clamp(count, 0, Math.Min(vertices.Length, IconCapacity));
+    }
+
+    unsafe void DrawLightIcons(in Matrix4x4 viewProjection, Vector3 light)
+    {
+        if (_icons == null || _iconCount < 2)
+        {
+            return;
+        }
+
+        var mapped = _context.Map(_iconVertexBuffer, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
+        fixed (Vertex* source = _icons)
+        {
+            Buffer.MemoryCopy(source, (void*)mapped.DataPointer, (long)IconCapacity * sizeof(Vertex), (long)_iconCount * sizeof(Vertex));
+        }
+
+        _context.Unmap(_iconVertexBuffer, 0);
+        _context.OMSetDepthStencilState(_gridDepthState, 0);
+        WriteConstants(Matrix4x4.Identity, viewProjection, light, unlit: true, highlight: 0f);
+        _context.RSSetState(_doubleSidedRasterizer);
+        _context.IASetPrimitiveTopology(PrimitiveTopology.LineList);
+        _vertexSlot[0] = _iconVertexBuffer;
+        _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
+        _textureSlot[0] = _whiteView;
+        _context.PSSetShaderResources(0, 1, _textureSlot);
+        _context.Draw((uint)(_iconCount & ~1), 0);
+        _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        _context.OMSetDepthStencilState(_depthState, 0);
+    }
+
     /// <summary>上传一个对象的顶点 / 索引 / 贴图（加载时调用一次，不在渲染循环里）。同 id 已存在时先替换。</summary>
     public void AddMesh(int id, MeshData mesh)
     {
         RemoveMesh(id);
+        if (mesh.Indices.Length == 0 || mesh.Vertices.Length == 0)
+        {
+            // Lights / empties have no geometry: nothing to upload.
+            return;
+        }
+
         var gpu = new GpuObject
         {
             Id = id,
@@ -646,6 +792,9 @@ public sealed class SceneRenderer : IDisposable
         _constantSlot[0] = _constants;
         _context.VSSetConstantBuffers(0, 1, _constantSlot);
         _context.PSSetConstantBuffers(0, 1, _constantSlot);
+        _lightSlot[0] = _lightConstants;
+        _context.PSSetConstantBuffers(1, 1, _lightSlot);
+        _eye = eye;
         _stride[0] = (uint)Marshal.SizeOf<Vertex>();
         _offset[0] = 0;
         _samplerSlot[0] = _sampler;
@@ -711,6 +860,7 @@ public sealed class SceneRenderer : IDisposable
             _context.OMSetDepthStencilState(_depthState, 0);
         }
 
+        DrawLightIcons(viewProjection, light);
         DrawOutline();
         DrawGizmo(viewProjection, view, light);
         _context.Flush();
@@ -729,7 +879,8 @@ public sealed class SceneRenderer : IDisposable
         constants->LightDirection = light;
         constants->Unlit = unlit ? 1f : 0f;
         constants->Highlight = highlight;
-        constants->Padding = Vector3.Zero;
+        constants->EyePosition = _eye;
+        constants->World = world;
         _context.Unmap(_constants, 0);
     }
 
@@ -774,6 +925,8 @@ public sealed class SceneRenderer : IDisposable
         _depthView?.Dispose();
         _depth?.Dispose();
         _constants.Dispose();
+        _lightConstants.Dispose();
+        _iconVertexBuffer.Dispose();
         _layout.Dispose();
         _vertexShader.Dispose();
         _pixelShader.Dispose();
@@ -897,7 +1050,18 @@ public sealed class SceneRenderer : IDisposable
         public Vector3 LightDirection;
         public float Unlit;
         public float Highlight;
-        public Vector3 Padding;
+        public Vector3 EyePosition;
+        public Matrix4x4 World;
+    }
+
+    /// <summary>One light in the Lights constant buffer (64 bytes, docs/07 §4.3).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LightData
+    {
+        public Vector4 PositionType;
+        public Vector4 DirectionRange;
+        public Vector4 ColorPower;
+        public Vector4 Cone;
     }
 
     /// <summary>一个场景对象的 GPU 资源：顶点 / 索引缓冲 + 贴图。</summary>

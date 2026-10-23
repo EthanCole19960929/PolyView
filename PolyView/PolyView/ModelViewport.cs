@@ -395,6 +395,12 @@ public sealed partial class ModelViewport : UserControl
         }
 
         bool ctrl = (modifiers & ModifierKeys.Control) != 0;
+        if (key == Key.A && modifiers == ModifierKeys.Shift)
+        {
+            ShowAddMenu();
+            return true;
+        }
+
         if (key == Key.Z && modifiers == ModifierKeys.Shift)
         {
             Wireframe = !Wireframe;
@@ -481,6 +487,7 @@ public sealed partial class ModelViewport : UserControl
             Name = path == null ? mesh.Name : System.IO.Path.GetFileName(path),
             SourcePath = path,
             Mesh = mesh,
+            ImportOffset = center,
         };
         obj.Transform.Position = center;
         _objects.Add(obj);
@@ -618,6 +625,7 @@ public sealed partial class ModelViewport : UserControl
     {
         UpdateGizmo();
         UpdateNavGizmo();
+        UpdateLights();
         _renderer!.Render(_camera, _scale, SceneRadius);
     }
 
@@ -719,7 +727,14 @@ public sealed partial class ModelViewport : UserControl
             if ((point - _pressPoint).Length < 4)
             {
                 // 打中最近的对象就选中它；点空白处取消选择。
-                Select(PickAt(point));
+                if (TryPickLight(point, out int lightObject, out int lightNode))
+                {
+                    SelectNode(lightObject, lightNode);
+                }
+                else
+                {
+                    Select(PickAt(point));
+                }
             }
 
             e.Handled = true;
