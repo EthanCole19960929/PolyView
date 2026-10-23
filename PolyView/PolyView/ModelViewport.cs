@@ -617,6 +617,7 @@ public sealed partial class ModelViewport : UserControl
     void RenderFrame()
     {
         UpdateGizmo();
+        UpdateNavGizmo();
         _renderer!.Render(_camera, _scale, SceneRadius);
     }
 
