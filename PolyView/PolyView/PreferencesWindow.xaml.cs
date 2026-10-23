@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -145,7 +145,7 @@ public partial class PreferencesWindow : Window
         Panel(UiText.T("状态栏", "Status Bar"), Rows(
             Check(UiText.T("场景统计", "Scene Statistics"), false, UiText.T("显示", "Show")),
             Check(UiText.T("显存", "Video Memory"), false),
-            Check(UiText.T("版本", "Blender Version"), false)), false));
+            Check(UiText.T("版本", "PolyView Version"), false)), false));
 
     UIElement LanguagePanel() => Rows(
         LanguageRow(),

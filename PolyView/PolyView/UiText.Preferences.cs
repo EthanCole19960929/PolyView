@@ -1,8 +1,8 @@
-﻿namespace PolyView;
+namespace PolyView;
 
 public static partial class UiText
 {
-    public static string PrefTitle => Chinese ? "Blender 偏好设置" : "Blender Preferences";
+    public static string PrefTitle => Chinese ? "PolyView 偏好设置" : "PolyView Preferences";
     public static string PrefSearch => Chinese ? "搜索" : "Search";
 
     /// <summary>Category keys in display order; null marks a group gap.</summary>

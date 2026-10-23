@@ -1,4 +1,4 @@
-﻿<Window x:Class="PolyView.MainWindow"
+<Window x:Class="PolyView.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:PolyView"
@@ -27,7 +27,6 @@
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="{StaticResource BarBrush}" Padding="6,2" BorderBrush="#FF161616" BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Image Source="pack://application:,,,/polyview.ico" Width="16" Height="16" Margin="2,0,6,0" VerticalAlignment="Center"/>
                 <Menu Background="Transparent" VerticalAlignment="Center">
                     <MenuItem x:Name="MenuFile">
                         <MenuItem x:Name="MenuNew" IsEnabled="False" InputGestureText="Ctrl+N"/>

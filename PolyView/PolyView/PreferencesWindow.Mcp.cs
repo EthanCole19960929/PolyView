@@ -85,11 +85,14 @@ public partial class PreferencesWindow
             foreach (var c in _mcpClients)
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 1) };
-                var cb = new CheckBox { IsChecked = _mcpChecked.Contains(c.Id), Width = 24, Style = (Style)FindResource("PrefCheck"), VerticalAlignment = VerticalAlignment.Center };
+                var cb = new CheckBox { IsEnabled = true, IsHitTestVisible = true, IsChecked = _mcpChecked.Contains(c.Id), Width = 24, Style = (Style)FindResource("PrefCheck"), VerticalAlignment = VerticalAlignment.Center };
                 var id = c.Id;
                 cb.Click += (_, _) => { if (cb.IsChecked == true) _mcpChecked.Add(id); else _mcpChecked.Remove(id); };
                 row.Children.Add(cb);
-                row.Children.Add(Cell(c.Name, c.Installed ? Brushes.White : DimBrush, 170));
+                var nameCell = Cell(c.Name, c.Installed ? Brushes.White : DimBrush, 170);
+                nameCell.Background = Brushes.Transparent;
+                nameCell.MouseLeftButtonUp += (_, _) => { cb.IsChecked = cb.IsChecked != true; if (cb.IsChecked == true) _mcpChecked.Add(id); else _mcpChecked.Remove(id); };
+                row.Children.Add(nameCell);
                 row.Children.Add(Cell(c.Installed ? "✔" : "—", c.Installed ? OkBrush : DimBrush));
                 row.Children.Add(Cell(c.ProcessRunning ? "✔" : "—", c.ProcessRunning ? OkBrush : DimBrush));
                 row.Children.Add(Cell(c.Connected ? "✔" : "—", c.Connected ? OkBrush : DimBrush));
@@ -124,17 +127,18 @@ public partial class PreferencesWindow
             var done = new List<string>();
             var restart = new List<string>();
             var manual = new List<string>();
+            var manualClients = new List<McpClient>();
             var failed = new List<string>();
             foreach (var c in _mcpClients.Where(c => _mcpChecked.Contains(c.Id)))
             {
-                if (!c.CanAuto) { manual.Add(c.Name); continue; }
+                if (!c.CanAuto) { manual.Add(c.Name); if (connect) manualClients.Add(c); continue; }
                 var err = connect ? McpClients.Connect(c) : McpClients.Disconnect(c);
                 if (err != null) { failed.Add($"{c.Name}: {err}"); continue; }
                 done.Add(c.Name);
                 if (c.ProcessRunning) restart.Add(c.Name);
             }
 
-            if (manual.Count > 0 && connect) Clipboard.SetText(McpClients.HttpSnippet);
+            if (manual.Count > 0 && connect) Clipboard.SetText(manualClients.Count == 1 ? McpClients.SnippetFor(manualClients[0]) : McpClients.HttpSnippet);
             var parts = new List<string>();
             if (done.Count > 0) parts.Add((connect ? UiText.T("已连接：", "Connected: ") : UiText.T("已断开：", "Disconnected: ")) + string.Join("、", done));
             if (restart.Count > 0) parts.Add(UiText.T("请重启以生效：", "Restart to apply: ") + string.Join("、", restart));
@@ -142,6 +146,12 @@ public partial class PreferencesWindow
             if (failed.Count > 0) parts.Add(UiText.T("失败：", "Failed: ") + string.Join("；", failed));
             message.Text = parts.Count > 0 ? string.Join("\n", parts) : UiText.T("没有勾选任何客户端。", "No client selected.");
             Scan();
+            if (manualClients.Count > 0)
+            {
+                var steps = string.Join("\n\n", manualClients.Select(McpClients.ManualSteps));
+                PvMessageDialog.Show(this, UiText.T("\u914d\u7f6e\u5df2\u590d\u5236\u5230\u526a\u8d34\u677f\u3002\u8bf7\u5728\u4e0b\u5217 AI \u8f6f\u4ef6\u91cc\u6dfb\u52a0\uff1a", "Config copied to the clipboard. Add it in:") + "\n\n" + steps + "\n\n" + McpClients.SnippetFor(manualClients[0]),
+                    UiText.T("\u624b\u52a8\u8fde\u63a5 AI", "Connect AI manually"), MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
 
         var buttons = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };

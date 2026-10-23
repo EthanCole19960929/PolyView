@@ -63,6 +63,7 @@ public static class McpClients
             c.Installed = existing != null || dirOk;
             c.ProcessRunning = c.Processes.Any(procs.Contains);
             c.Connected = c.ConfigPath != null && IsConnected(c);
+            if (!c.Connected && c.Id == "claude-code") c.Connected = ClaudeProjectConnected();
         }
 
         return list;
@@ -74,12 +75,34 @@ public static class McpClients
         {
             if (!File.Exists(c.ConfigPath)) return false;
             var text = File.ReadAllText(c.ConfigPath!);
+            if (text.Contains("127.0.0.1:47800")) return true;
             if (c.Format == "toml") return text.Contains($"[{c.Key}.{ServerName}]");
             var root = JsonNode.Parse(text, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonObject;
             return root?[c.Key] is JsonObject servers && servers[ServerName] != null;
         }
         catch { return false; }
     }
+
+    /// <summary>Claude Code also stores servers per project in ~/.claude.json.</summary>
+    static bool ClaudeProjectConnected()
+    {
+        try
+        {
+            foreach (var p in new[] { Expand("%USERPROFILE%\\.claude.json"), Expand("%USERPROFILE%\\.claude\\settings.json") })
+                if (File.Exists(p) && File.ReadAllText(p).Contains("127.0.0.1:47800")) return true;
+        }
+        catch { }
+        return false;
+    }
+
+    /// <summary>Per-client paste instructions for manual clients.</summary>
+    public static string ManualSteps(McpClient c) => c.Id switch
+    {
+        "deepseek-harness" => UiText.T($"DeepSeek Harness\uff1a\u5de6\u4fa7\u300c\u63d2\u4ef6\u300d\u2192 \u6dfb\u52a0 MCP \u670d\u52a1\u5668 \u2192 \u7c7b\u578b\u9009 HTTP\uff0c\u540d\u79f0 polyview\uff0c\u5730\u5740 {McpServerHost.Url}\uff08\u6216\u7c98\u8d34\u5df2\u590d\u5236\u7684 JSON\uff09\u3002", $"DeepSeek Harness: sidebar \u63d2\u4ef6 (Plugins) \u2192 add MCP server \u2192 HTTP, name polyview, URL {McpServerHost.Url} (or paste the copied JSON)."),
+        "cherry" or "deepseek" => UiText.T($"Cherry Studio\uff1a\u8bbe\u7f6e \u2192 MCP \u670d\u52a1\u5668 \u2192 \u6dfb\u52a0 \u2192 \u4ece JSON \u5bfc\u5165\u5e76\u7c98\u8d34\uff1b\u6216\u7c7b\u578b\u9009 Streamable HTTP\uff0c\u5730\u5740 {McpServerHost.Url}\u3002", $"Cherry Studio: Settings \u2192 MCP Servers \u2192 Add \u2192 import from JSON and paste, or Streamable HTTP with URL {McpServerHost.Url}."),
+        "chatbox" => UiText.T($"Chatbox\uff1a\u8bbe\u7f6e \u2192 MCP \u2192 \u6dfb\u52a0\u670d\u52a1\u5668\uff0c\u9009 HTTP\uff0c\u5730\u5740 {McpServerHost.Url}\u3002", $"Chatbox: Settings \u2192 MCP \u2192 add server, HTTP, URL {McpServerHost.Url}."),
+        _ => UiText.T($"{c.Name}\uff1a\u5728\u5b83\u7684 MCP \u8bbe\u7f6e\u91cc\u6dfb\u52a0\u670d\u52a1\u5668\uff0c\u7c98\u8d34\u5df2\u590d\u5236\u7684\u914d\u7f6e\uff0c\u6216\u586b\u5730\u5740 {McpServerHost.Url}\u3002", $"{c.Name}: add a server in its MCP settings and paste the copied config, or use URL {McpServerHost.Url}."),
+    };
 
     static void Backup(string path)
     {
