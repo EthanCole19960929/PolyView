@@ -1,5 +1,0 @@
-PolyView 格式测试模型（全部 CC0 公共领域授权）
-01_同一模型五种格式_barrel：Kenney Space Kit 的 barrel，同一个模型的 STL / OBJ+MTL / FBX / DAE / glTF / GLB，用来对比各格式导入结果是否一致。
-02_带贴图_watertower：KayKit City Builder Bits 的 watertower，OBJ+MTL、FBX、glTF+bin 三种，都引用同一张 citybits_texture.png，测试贴图路径解析。
-03_带骨骼_Knight：KayKit Adventurers 的 Knight，FBX 格式，带骨骼和动画，可与 Models\Knight.glb 对比。
-来源：https://kenney.nl/assets/space-kit 、https://kaylousberg.itch.io/city-builder-bits 、https://kaylousberg.itch.io/kaykit-adventurers

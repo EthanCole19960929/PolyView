@@ -1,5 +1,6 @@
 using System.IO;
 using System.Numerics;
+using System.Text.Json.Nodes;
 using SharpGLTF.Schema2;
 
 namespace PolyView;
@@ -10,10 +11,32 @@ namespace PolyView;
 /// </summary>
 public static class GltfImporter
 {
+    /// <summary>普通文件直接交给 SharpGLTF；Draco 压缩的 GLB 先解压成普通 GLB 再读。</summary>
+    static ModelRoot Open(string path, ReadSettings settings)
+    {
+        if (Path.GetExtension(path).Equals(".glb", StringComparison.OrdinalIgnoreCase))
+        {
+            var bytes = File.ReadAllBytes(path);
+            if (DracoGlb.UsesDraco(bytes))
+            {
+                var decoded = DracoGlb.Decompress(bytes);
+                var directory = new DirectoryInfo(Path.GetDirectoryName(Path.GetFullPath(path)) ?? ".");
+                using var stream = new MemoryStream(decoded, writable: false);
+                return ReadContext.CreateFromDirectory(directory).WithSettingsFrom(settings).ReadBinarySchema2(stream);
+            }
+        }
+        else if (File.ReadAllText(path).Contains("KHR_draco_mesh_compression", StringComparison.Ordinal))
+        {
+            throw new DracoNotSupportedException("该 glTF 使用 Draco 压缩，目前只支持 Draco 压缩的 .glb，请用 .glb 版本。");
+        }
+
+        return ModelRoot.Load(path, settings);
+    }
+
     public static MeshData Load(string path)
     {
         var settings = new ReadSettings { Validation = SharpGLTF.Validation.ValidationMode.TryFix };
-        var model = ModelRoot.Load(path, settings);
+        var model = Open(path, settings);
 
         var vertices = new List<Vertex>();
         var indices = new List<uint>();
@@ -23,29 +46,33 @@ public static class GltfImporter
 
         IEnumerable<Node> roots = model.DefaultScene?.VisualChildren
             ?? model.LogicalNodes.Where(n => n.VisualParent == null);
+        var sceneNodes = new List<SceneNode>();
+        var nodeSlots = new Dictionary<Node, int>();
         foreach (var node in Flatten(roots))
         {
-            if (node.Mesh == null)
+            int slot = sceneNodes.Count;
+            int parent = node.VisualParent != null && nodeSlots.TryGetValue(node.VisualParent, out var p) ? p : -1;
+            nodeSlots[node] = slot;
+            int firstPart = parts.Count;
+            if (node.Mesh != null)
             {
-                continue;
+                AddNodeMesh(node, vertices, indices, parts, textures, textureSlots);
             }
 
-            Matrix4x4[]? jointMatrices = null;
-            if (node.Skin != null && node.Skin.JointsCount > 0)
+            var camera = ReadCamera(node.Camera);
+            var light = ReadLight(node);
+            sceneNodes.Add(new SceneNode
             {
-                jointMatrices = new Matrix4x4[node.Skin.JointsCount];
-                for (int i = 0; i < jointMatrices.Length; i++)
-                {
-                    var (joint, inverseBind) = node.Skin.GetJoint(i);
-                    jointMatrices[i] = inverseBind * joint.WorldMatrix;
-                }
-            }
-
-            var world = node.WorldMatrix;
-            foreach (var primitive in node.Mesh.Primitives)
-            {
-                AddPrimitive(primitive, world, jointMatrices, vertices, indices, parts, textures, textureSlots);
-            }
+                Index = slot,
+                Name = string.IsNullOrEmpty(node.Name) ? $"Node {node.LogicalIndex}" : node.Name,
+                Parent = parent,
+                Kind = node.Mesh != null ? SceneNodeKind.Mesh : camera != null ? SceneNodeKind.Camera : light != null ? SceneNodeKind.Light : SceneNodeKind.Empty,
+                Local = node.LocalMatrix,
+                World = node.WorldMatrix,
+                PartIndices = Enumerable.Range(firstPart, parts.Count - firstPart).ToArray(),
+                Camera = camera,
+                Light = light,
+            });
         }
 
         if (indices.Count < 3)
@@ -70,7 +97,204 @@ public static class GltfImporter
             Max = max,
             Parts = parts.ToArray(),
             Textures = textures.ToArray(),
+            Nodes = SceneNode.Link(sceneNodes),
+            World = ReadWorld(model.DefaultScene),
         };
+    }
+
+    static void AddNodeMesh(
+        Node node,
+        List<Vertex> vertices,
+        List<uint> indices,
+        List<MeshPart> parts,
+        List<MeshTexture> textures,
+        Dictionary<int, int> textureSlots)
+    {
+        Matrix4x4[]? jointMatrices = null;
+        if (node.Skin != null && node.Skin.JointsCount > 0)
+        {
+            jointMatrices = new Matrix4x4[node.Skin.JointsCount];
+            for (int i = 0; i < jointMatrices.Length; i++)
+            {
+                var (joint, inverseBind) = node.Skin.GetJoint(i);
+                jointMatrices[i] = inverseBind * joint.WorldMatrix;
+            }
+        }
+
+        var world = node.WorldMatrix;
+        foreach (var primitive in node.Mesh.Primitives)
+        {
+            AddPrimitive(primitive, world, jointMatrices, vertices, indices, parts, textures, textureSlots);
+        }
+    }
+
+    static SceneCamera? ReadCamera(SharpGLTF.Schema2.Camera? camera)
+    {
+        if (camera == null)
+        {
+            return null;
+        }
+
+        return camera.Settings switch
+        {
+            CameraPerspective p => new SceneCamera
+            {
+                YFov = p.VerticalFOV,
+                AspectRatio = p.AspectRatio ?? 0,
+                Near = p.ZNear,
+                Far = float.IsFinite(p.ZFar) ? p.ZFar : 0,
+            },
+            CameraOrthographic o => new SceneCamera
+            {
+                Orthographic = true,
+                OrthoHalfHeight = o.YMag,
+                AspectRatio = o.YMag != 0 ? o.XMag / o.YMag : 0,
+                Near = o.ZNear,
+                Far = o.ZFar,
+            },
+            _ => new SceneCamera(),
+        };
+    }
+
+    /// <summary>
+    /// KHR_lights_punctual 只有点光 / 平行光 / 聚光。面光按 docs/07 §6 写在节点 extras 里：
+    /// "polyview_light": {"type":"area","shape":"rectangle","size":[2,1],"power":100,"color":[r,g,b]}；
+    /// 点光 / 聚光也可在 polyview_light 里给 "radius"。
+    /// </summary>
+    static SceneLight? ReadLight(Node node)
+    {
+        var extra = (node.Extras as JsonObject)?["polyview_light"] as JsonObject;
+        var light = node.PunctualLight;
+        if (light == null)
+        {
+            if (!string.Equals(Str(extra, "type"), "area", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var shape = (Str(extra, "shape") ?? "square").ToLowerInvariant() switch
+            {
+                "rectangle" => AreaShape.Rectangle,
+                "disk" => AreaShape.Disk,
+                "ellipse" => AreaShape.Ellipse,
+                _ => AreaShape.Square,
+            };
+            var size = Vec2(extra, "size", Vector2.One);
+            if (shape is AreaShape.Square or AreaShape.Disk)
+            {
+                size = new Vector2(size.X, size.X);
+            }
+
+            float power = Num(extra, "power", SceneLight.DefaultPointPower);
+            return new SceneLight
+            {
+                Type = SceneLightType.Area,
+                Color = Vec3(extra, "color", Vector3.One),
+                Intensity = power,
+                Power = power,
+                Shape = shape,
+                Size = size,
+            };
+        }
+
+        float range = float.IsFinite(light.Range) ? light.Range : 0;
+        float radius = Num(extra, "radius", SceneLight.DefaultRadius);
+        switch (light.LightType)
+        {
+            case PunctualLightType.Directional:
+                return new SceneLight
+                {
+                    Type = SceneLightType.Directional,
+                    Color = light.Color,
+                    Intensity = light.Intensity,
+                    Power = SceneLight.LuxToWattsPerSquareMeter(light.Intensity),
+                };
+            case PunctualLightType.Spot:
+                float outer = light.OuterConeAngle;
+                return new SceneLight
+                {
+                    Type = SceneLightType.Spot,
+                    Color = light.Color,
+                    Intensity = light.Intensity,
+                    Power = SceneLight.CandelaToWatts(light.Intensity),
+                    Range = range,
+                    Radius = radius,
+                    InnerConeAngle = light.InnerConeAngle,
+                    OuterConeAngle = outer,
+                    SpotBlend = outer > 0 ? Math.Clamp(1f - light.InnerConeAngle / outer, 0f, 1f) : 0f,
+                };
+            default:
+                return new SceneLight
+                {
+                    Type = light.LightType == PunctualLightType.Point ? SceneLightType.Point : SceneLightType.Unknown,
+                    Color = light.Color,
+                    Intensity = light.Intensity,
+                    Power = SceneLight.CandelaToWatts(light.Intensity),
+                    Range = range,
+                    Radius = radius,
+                };
+        }
+    }
+
+    /// <summary>场景 extras："polyview_world": {"color":[r,g,b],"strength":1}。</summary>
+    static SceneWorld ReadWorld(Scene? scene)
+    {
+        if ((scene?.Extras as JsonObject)?["polyview_world"] is not JsonObject world)
+        {
+            return new SceneWorld();
+        }
+
+        return new SceneWorld
+        {
+            Color = Vec3(world, "color", new Vector3(0.05f)),
+            Strength = Num(world, "strength", 1f),
+            FromFile = true,
+        };
+    }
+
+    static Vector2 Vec2(JsonObject? o, string key, Vector2 fallback)
+    {
+        if (o == null || !o.TryGetPropertyValue(key, out var v))
+        {
+            return fallback;
+        }
+
+        if (v is JsonValue single && single.TryGetValue<double>(out var d))
+        {
+            return new Vector2((float)d);
+        }
+
+        if (v is JsonArray a && a.Count >= 2)
+        {
+            float At(int i) => a[i] is JsonValue jv && jv.TryGetValue<double>(out var x) ? (float)x : 0f;
+            return new Vector2(At(0), At(1));
+        }
+
+        return fallback;
+    }
+
+    static string? Str(JsonObject? o, string key)
+        => o != null && o.TryGetPropertyValue(key, out var v) && v is JsonValue jv && jv.TryGetValue<string>(out var s) ? s : null;
+
+    static float Num(JsonObject? o, string key, float fallback)
+    {
+        if (o == null || !o.TryGetPropertyValue(key, out var v) || v is not JsonValue jv)
+        {
+            return fallback;
+        }
+
+        return jv.TryGetValue<double>(out var d) ? (float)d : fallback;
+    }
+
+    static Vector3 Vec3(JsonObject? o, string key, Vector3 fallback)
+    {
+        if (o == null || !o.TryGetPropertyValue(key, out var v) || v is not JsonArray a || a.Count < 3)
+        {
+            return fallback;
+        }
+
+        float At(int i) => a[i] is JsonValue jv && jv.TryGetValue<double>(out var d) ? (float)d : 0f;
+        return new Vector3(At(0), At(1), At(2));
     }
 
     static IEnumerable<Node> Flatten(IEnumerable<Node> nodes)
@@ -139,7 +363,7 @@ public static class GltfImporter
             local[i] = new Vertex(position, normal)
             {
                 TexCoord = uvs != null && i < uvs.Count ? uvs[i] : Vector2.Zero,
-                Color = baseColor * (colors != null && i < colors.Length ? colors[i] : Vector4.One),
+                Color = Vertex.PackColor(baseColor * (colors != null && i < colors.Length ? colors[i] : Vector4.One)),
             };
         }
 
@@ -285,3 +509,6 @@ public static class GltfImporter
         return (color, slot, channel.Value.TextureCoordinate);
     }
 }
+
+/// <summary>Draco 相关的失败（缺解码库、.gltf 外置 Draco 等），不再退回 Assimp，直接把原因显示出来。</summary>
+public sealed class DracoNotSupportedException(string message) : IOException(message);

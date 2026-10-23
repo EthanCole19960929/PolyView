@@ -7,13 +7,24 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>polyview.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="polyview.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="SharpGLTF.Core" Version="1.0.7" />
+    <PackageReference Include="Silk.NET.Assimp" Version="2.23.0" />
     <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
     <PackageReference Include="Vortice.Direct3D9" Version="3.8.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Google Draco 解码库（Apache-2.0），来源和编译方法见 native\win-x64\README.txt -->
+    <None Include="native\win-x64\draco_decoder.dll" Link="draco_decoder.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
