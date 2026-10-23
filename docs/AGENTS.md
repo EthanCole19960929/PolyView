@@ -13,7 +13,7 @@ PolyView 是一个用 C# 写的轻量 Windows 3D 模型查看器：WPF 做界面
 | 01 | [01_开发计划说明.md](01_开发计划说明.md) | Ethan | 2026-10-23 | 技术选型、架构、分阶段计划和风险 |
 | 02 | [02_动作资源网站.md](02_动作资源网站.md) | Ethan | 2026-10-23 | 骨骼动作素材网站（Mixamo 等）和使用限制 |
 | 03 | [03_3D显示原理与优化.md](03_3D显示原理与优化.md) | 小U | 2026-10-23 | 3D 显示原理与优化草稿（容量数字为估算） |
-| 04 | [04_渲染原理与优化.md](04_渲染原理与优化.md) | 小B | 2026-10-23 | 按实际代码写的渲染流程、已做 / 待做优化、实测容量（随代码提交补上） |
+| 04 | [04_渲染原理与优化.md](04_渲染原理与优化.md) | 小B | 2026-10-23 | 按实际代码写的渲染流程、相机和光照、已做 / 待做优化、实测容量、格式和 Draco 说明 |
 | — | [AGENTS.md](AGENTS.md) | 小B | 2026-10-23 | 本文：接手说明和文档索引 |
 
 **规则：** 新的 Markdown 文档一律放进 `docs\`，文件名用下一个两位编号 `NN_标题.md`，并且必须加进上面这张表。只有 `AGENTS.md` 不编号。
@@ -25,7 +25,9 @@ PolyView 是一个用 C# 写的轻量 Windows 3D 模型查看器：WPF 做界面
 | 运行时 | .NET 10，`net10.0-windows`，WPF（代码后置，没有 MVVM） |
 | 渲染 | Vortice.Direct3D11 3.8.3、Vortice.Direct3D9 3.8.3（D3D9Ex 只做 D3DImage 共享表面）、Vortice.D3DCompiler 3.8.3（实际用 P/Invoke 调 `d3dcompiler_47.dll` 运行时编译 HLSL） |
 | glTF / GLB | SharpGLTF.Core 1.0.7 |
-| FBX / DAE / OBJ+MTL / 3DS / PLY | Silk.NET.Assimp 2.23.0（自带原生 assimp 6.0.2，`runtimes\win-x64\native`）— 随下一次代码提交加入 |
+| FBX / DAE / OBJ+MTL / 3DS / PLY | Silk.NET.Assimp 2.23.0（自带原生 assimp 6.0.2，`runtimes\win-x64\native`） |
+| Draco（GLB 的 KHR_draco_mesh_compression） | Google Draco 1.5.7 解码库，Apache-2.0，从源码交叉编译的 `native\win-x64\draco_decoder.dll`，P/Invoke 调用（来源和编译方法见同目录 README.txt） |
+| three.js JSON | 自己写的解析器（`ThreeJsImporter.cs`，用 System.Text.Json） |
 | STL | 自己写的解析器（`MeshImporter.cs`） |
 | 数学 | `System.Numerics`（行向量约定，右手系，Y 轴朝上） |
 
@@ -61,9 +63,13 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
         ├── MeshData.cs             Vertex / MeshPart / MeshTexture / MeshData / ImportResult
         ├── MeshImporter.cs         按扩展名分派导入；自带 OBJ / STL 解析
         ├── GltfImporter.cs         SharpGLTF 读 glTF / GLB：节点层级变换、蒙皮按绑定姿态、贴图
-        ├── TextureDecoder.cs       用 WPF 把 PNG / JPEG 解码成 BGRA32
+        ├── DracoGlb.cs             GLB 里的 Draco 压缩网格：调 draco_decoder.dll 解码后重写成普通 GLB
+        ├── AssimpImporter.cs       Assimp 读 FBX / DAE / OBJ+MTL / 3DS / PLY，含 FBX 内嵌贴图
+        ├── ThreeJsImporter.cs      three.js JSON（Object / Scene 4.x）
+        ├── TextureDecoder.cs       用 WPF / WIC 把 PNG / JPEG / WebP 解码成 BGRA32（没有解码器时跳过）
         ├── MeshBuilder.cs          内置示例长方体 / 网格，导出 OBJ / STL
-        └── UiText.cs               中英文界面文字
+        ├── UiText.cs               中英文界面文字
+        └── native/win-x64/         draco_decoder.dll + 许可证 + 来源说明（编译时复制到输出目录）
 ```
 
 本地备份目录 `_旧版备份\` 已加入 `.gitignore`，不要提交。
@@ -74,14 +80,18 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 
 ## 支持的格式
 
-| 格式 | 导入方式 | 说明 |
-| --- | --- | --- |
-| .glb / .gltf | SharpGLTF（失败时退回 Assimp） | 多网格、多图元、节点变换、基础颜色贴图、顶点色、双面；蒙皮按绑定姿态 |
-| .fbx / .dae / .3ds / .ply | Assimp | 节点变换烘焙进顶点，缺法线自动生成，读漫反射颜色和贴图 |
-| .obj (+.mtl) | Assimp，失败时退回自带解析器 | 读 MTL 颜色和 map_Kd 贴图 |
-| .stl | 自带解析器 | 二进制 / ASCII；按惯例 Z 轴朝上，导入时转成 Y 轴朝上 |
+「已支持（master）」表示已合并进 master；「已支持（feat/import-xiaoB）」表示只在小B的分支上，等 Ethan 合并；「开发中」是正在这个分支上写；「计划中」是还没开始。
 
-（FBX / DAE / 3DS / PLY 和 OBJ 走 Assimp 随下一次代码提交生效；当前 master 上只有 OBJ / STL / GLB / glTF。）
+| 格式 | 导入方式 | 状态 | 说明 |
+| --- | --- | --- | --- |
+| .glb / .gltf | SharpGLTF（失败时退回 Assimp） | 已支持（master） | 多网格、多图元、节点变换、基础颜色贴图（PNG / JPEG）、顶点色、双面；蒙皮按绑定姿态 |
+| .obj (+.mtl) | 自带解析器；分支上改为 Assimp 优先 | 已支持（master）；Assimp 读 MTL 贴图：已支持（feat/import-xiaoB） | 读 MTL 颜色和 map_Kd 贴图 |
+| .stl | 自带解析器 | 已支持（master） | 二进制 / ASCII；按惯例 Z 轴朝上，导入时转成 Y 轴朝上（分支上） |
+| .fbx / .dae | Assimp | 已支持（feat/import-xiaoB） | 节点变换烘焙进顶点，缺法线自动生成，读漫反射颜色和贴图（含 FBX 内嵌贴图） |
+| .3ds / .ply | Assimp | 已支持（feat/import-xiaoB） | 同上，未专门测试 |
+| three.js JSON（.json，`toJSON()` / 编辑器导出） | 自写解析器 | 已支持（feat/import-xiaoB） | `metadata.version` 4.x 的 Object / Scene 格式：BufferGeometry（position / normal / uv / color / index）+ Box / Sphere / Cylinder / Plane + 节点 matrix，只取基础颜色；其他几何体跳过并在状态栏说明；不是 three.js 的 .json 给一行提示。多数 three.js 项目发布的是 .glb / .gltf，已经能直接打开 |
+| GLB + KHR_draco_mesh_compression | Draco 1.5.7 解码库（`DracoGlb.cs`） | 已支持（feat/import-xiaoB），只支持 .glb | Ethan 的模型图库 54 个 GLB 里有 52 个用了 Draco；.gltf + Draco 会提示请用 .glb；找不到 DLL 时提示「该 GLB 使用 Draco 压缩…暂不支持」 |
+| GLB + EXT_texture_webp | SharpGLTF + Windows WIC 解码 | 已支持（feat/import-xiaoB） | 系统有 WebP 解码器（Windows 10 / 11 一般自带）时显示贴图，在 Ethan 电脑上实测正常；没有解码器时安全跳过，只显示基础颜色 |
 
 ## 操作（Blender 风格）
 
@@ -95,7 +105,9 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 | 透视 / 正交切换 | 小键盘 5 |
 | 打开模型 | 「打开模型」按钮、把文件拖到窗口任意位置，或命令行参数 |
 
-（Blender 式导航随下一次代码提交生效。）
+（状态：已支持（feat/import-xiaoB）；master 上是左键环绕、中键平移、滚轮缩放。）
+
+命令行性能测试：`PolyView.exe --bench <模型> <输出.tsv>`，加载、测 FPS 和 GPU 每帧耗时，追加一行 TSV 后退出。说明和实测结果见 [04_渲染原理与优化.md](04_渲染原理与优化.md)。
 
 ## 文件归属
 
@@ -122,7 +134,7 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 ## 当前进度（2026-10-23）
 
 - 已在 master：OBJ / STL / GLB / glTF 导入，拖放打开，命令行打开，修复视口全黑（矩阵转置），中英文切换。
-- `feat/import-xiaoB` 分支：Models 平铺（bf3fd7b）、文档整理；进行中的代码：Assimp 导入 FBX / DAE、Blender 式导航、地面网格、按需渲染和 FPS、去掉「X 拉伸」滑块、相机跟随光照。
+- `feat/import-xiaoB` 分支（已推送，等 Ethan 合并）：Models 平铺（bf3fd7b）、文档整理（c6a515c）、合并 master（e7a1015）；代码提交：Assimp 导入 FBX / DAE、three.js JSON、GLB 的 Draco 解码和 WebP 贴图、Blender 式导航、地面网格、按需渲染和 FPS、去掉「X 拉伸」滑块、相机跟随光照、`--bench` 性能测试、docs/04。
 - 下一步：小C 按下面的验收标准逐项验收；内存反复开关测试；拾取和场景树（第 2 阶段）交给小U。
 
 ## 验收标准与已知坑
@@ -162,3 +174,6 @@ Ethan 可能开着 `PolyView.exe`，编译报文件被占用时先告诉他，�
 - **Assimp 原生库：** 自带的 assimp 6.0.2 没有导出 `aiGetEmbeddedTexture`，内嵌贴图要自己按 `*N` 或文件名去 `scene->mTextures` 里找。
 - **`[Oo]bj/` 忽略规则：** 会把名叫 `obj` 的模型子目录也忽略掉，之前 `watertower.obj` 因此没进仓库。
 - **FPS：** `CompositionTarget.Rendering` 跟着显示器刷新率走，帧率上限约等于刷新率；只在需要时渲染，静止时显示「空闲」，每约 0.5 秒统计一次，不每帧拼字符串。
+- **Draco 解码后的 min / max：** Draco 是量化压缩，解出来的坐标会略微超出 accessor 原来写的 min / max，SharpGLTF 读取时会校验并报错，所以重写 GLB 时要按解码结果重新算 min / max。
+- **draco_decoder.dll 依赖：** mingw 编出的 DLL 默认依赖 libgcc_s / libstdc++，Ethan 电脑上没有；CMake 的目标是 MODULE，要用 `CMAKE_MODULE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++"`，编完用 objdump 确认只依赖 KERNEL32 和 msvcrt。
+- **FPS 上限：** 状态栏 FPS 最多约等于显示器刷新率，看 GPU 真实负载用 `--bench` 的「GPU ms/帧」。

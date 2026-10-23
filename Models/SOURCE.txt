@@ -6,6 +6,8 @@ PolyView 测试模型（Models\ 目录，全部 CC0-1.0 公共领域授权）
 - barrel.stl / barrel.obj + barrel.mtl / barrel.fbx / barrel.dae / barrel.glb：Kenney Space Kit 的 barrel，同一个模型的多种格式，用来对比各格式导入结果是否一致。https://kenney.nl/assets/space-kit
 - watertower.obj + watertower.mtl / watertower.fbx / watertower.gltf + watertower.bin：KayKit City Builder Bits 的 watertower，三种格式共用同一张 citybits_texture.png（同目录），测试贴图路径解析。https://kaylousberg.itch.io/city-builder-bits
 
+- threejs_scene.json：小B 自己做的测试场景（CC0），用 three.js r186 的 Object3D.toJSON() 导出（metadata.version 4.7）：红色立方体、蓝色球、一个旋转过的组里带旋转和缩放的绿色圆柱，几何体导出前转成普通 BufferGeometry。用来测 three.js JSON 导入，PolyView 应读出 733 顶点 / 1068 三角形 / 3 段。
+
 2026-10-23 小B 把原来的 Models\格式测试\ 子目录平铺到 Models\ 根目录；三份内容相同的 citybits_texture.png 只保留一份。
 
 ===== Knight.glb 下载记录（原 SOURCE.txt） =====

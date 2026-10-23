@@ -9,14 +9,22 @@ public struct Vertex
     public Vector3 Position;
     public Vector3 Normal;
     public Vector2 TexCoord;
-    public Vector4 Color;
+
+    /// <summary>RGBA8 打包的顶点色（R 在最低字节），着色器里按 R8G8B8A8_UNorm 读。</summary>
+    public uint Color;
 
     public Vertex(Vector3 position, Vector3 normal)
     {
         Position = position;
         Normal = normal;
         TexCoord = Vector2.Zero;
-        Color = Vector4.One;
+        Color = 0xFFFFFFFF;
+    }
+
+    public static uint PackColor(Vector4 color)
+    {
+        var c = Vector4.Clamp(color, Vector4.Zero, Vector4.One) * 255f + new Vector4(0.5f);
+        return (uint)c.X | ((uint)c.Y << 8) | ((uint)c.Z << 16) | ((uint)c.W << 24);
     }
 }
 
@@ -52,6 +60,9 @@ public sealed class MeshData
     public MeshPart[] Parts { get; init; } = [];
 
     public MeshTexture[] Textures { get; init; } = [];
+
+    /// <summary>导入时的提示（例如跳过了哪些内容），显示在状态栏；空字符串表示没有。</summary>
+    public string Notice { get; init; } = "";
 
     public int TriangleCount => Indices.Length / 3;
 }

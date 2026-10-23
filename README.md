@@ -35,7 +35,9 @@ Built with C# / WPF and Direct3D 11
 > [!NOTE]
 > PolyView is in **early development (Phase 0)**. Features below are planned unless checked in the roadmap.
 >
-> **Working today:** open OBJ / STL / GLB / glTF (all meshes and primitives, node hierarchy transforms, base color texture & vertex colors; skinned models shown in bind pose), drag & drop a model file anywhere on the window, orbit / pan / zoom.
+> **Working today (master):** open OBJ / STL / GLB / glTF (all meshes and primitives, node hierarchy transforms, base color texture & vertex colors; skinned models shown in bind pose), drag & drop a model file anywhere on the window, orbit / pan / zoom.
+>
+> **On branch `feat/import-xiaoB`:** FBX / DAE / three.js JSON, Draco-compressed GLB and WebP textures, Blender-style navigation (middle mouse, numpad views, ortho), grid floor, on-demand rendering with an FPS readout. See [Supported Formats](#-supported-formats).
 
 ## ✨ Features
 
@@ -48,6 +50,21 @@ Built with C# / WPF and Direct3D 11
 | 🌙 | **Modern UI** | Fluent design, dark theme, dockable panels |
 | ⚡ | **Stable memory** | No memory spikes or stutter, even with large models |
 | 🖥️ | **High-DPI ready** | Crisp viewport at 100% / 150% / 200% scaling |
+
+## 📦 Supported Formats
+
+"Supported (master)" = merged into master; "Supported (feat/import-xiaoB)" = only on 小B's branch, waiting for Ethan to merge; "In progress" = being written; "Planned" = not started. Details and measured numbers: [docs/04_渲染原理与优化.md](docs/04_渲染原理与优化.md).
+
+| Format | Importer | Status | Notes |
+| --- | --- | --- | --- |
+| .glb / .gltf | SharpGLTF (falls back to Assimp) | Supported (master) | Meshes, node transforms, base color texture, vertex colors, double-sided; skinned models in bind pose |
+| .obj (+.mtl) | Custom parser; on the branch Assimp first | Supported (master) | MTL colors and map_Kd textures |
+| .stl | Custom parser | Supported (master) | Binary / ASCII; Z-up converted to Y-up on the branch |
+| .fbx / .dae | Assimp 6.0.2 (Silk.NET.Assimp) | Supported (feat/import-xiaoB) | Node transforms, generated normals, diffuse color and textures (incl. embedded FBX textures) |
+| .3ds / .ply | Assimp | Supported (feat/import-xiaoB), not specifically tested | Same as above |
+| three.js JSON (.json, `toJSON()` / editor export) | Custom parser | Supported (feat/import-xiaoB) | Format 4.x, BufferGeometry + Box / Sphere / Cylinder / Plane, node matrices, base color. Most three.js projects ship .glb / .gltf, which already work |
+| GLB + KHR_draco_mesh_compression | Google Draco 1.5.7 decoder (Apache-2.0, built from source) | Supported (feat/import-xiaoB), .glb only | Decoded and rewritten before SharpGLTF reads it |
+| GLB + EXT_texture_webp | SharpGLTF + Windows WIC | Supported (feat/import-xiaoB) | Shown when the system WebP codec is installed, otherwise skipped safely |
 
 ## 🛠️ Tech Stack
 
@@ -130,7 +147,8 @@ Or open `PolyView/PolyView.slnx` in Visual Studio and press **F5**.
     ├── AGENTS.md            # Hand-over notes and doc index
     ├── 01_开发计划说明.md     # Development plan (Chinese)
     ├── 02_动作资源网站.md     # Animation resource sites (Chinese)
-    └── 03_3D显示原理与优化.md  # 3D display principles & optimization draft (Chinese)
+    ├── 03_3D显示原理与优化.md  # 3D display principles & optimization draft (Chinese)
+    └── 04_渲染原理与优化.md    # Rendering pipeline, optimizations, measured capacity (Chinese)
 ```
 
 ## 🧩 Sample Models

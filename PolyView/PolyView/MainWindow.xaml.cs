@@ -13,10 +13,19 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Viewport.ViewChanged += (_, _) => UpdateStatus();
+        Viewport.StatsChanged += (_, _) => UpdateFps();
         ApplyLanguage();
 
+        var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
+        // 性能测试：PolyView.exe --bench 模型路径 结果文件（追加一行制表符分隔的结果后自动退出）
+        if (args.Length >= 3 && args[0] == "--bench")
+        {
+            Viewport.StartBenchmark(System.IO.Path.GetFullPath(args[1]), System.IO.Path.GetFullPath(args[2]));
+            return;
+        }
+
         // 支持「打开方式」或命令行：PolyView.exe 模型路径
-        var startup = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(MeshImporter.IsSupported);
+        var startup = args.FirstOrDefault(MeshImporter.IsSupported);
         if (startup != null && System.IO.File.Exists(startup))
         {
             Viewport.LoadPath(System.IO.Path.GetFullPath(startup));
@@ -30,9 +39,30 @@ public partial class MainWindow : Window
         ResetButton.Content = UiText.Reset;
         LanguageButton.Content = UiText.Language;
         ScaleLabel.Text = UiText.Scale;
-        StretchLabel.Text = UiText.Stretch;
         HintText.Text = UiText.Hint;
         UpdateStatus();
+        UpdateFps();
+    }
+
+    void UpdateFps()
+    {
+        // 只在统计窗口结束时（约每 0.4 秒）拼一次字符串，不是每帧。
+        string projection = Viewport.Orthographic ? UiText.Ortho : UiText.Perspective;
+        FpsText.Text = projection + "    " + UiText.Fps(Viewport.FramesPerSecond, Viewport.FrameMilliseconds);
+    }
+
+    void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.OriginalSource is System.Windows.Controls.Primitives.TextBoxBase)
+        {
+            return;
+        }
+
+        if (Viewport.HandleKey(e.Key, Keyboard.Modifiers))
+        {
+            e.Handled = true;
+            UpdateFps();
+        }
     }
 
     void UpdateStatus()
@@ -59,8 +89,11 @@ public partial class MainWindow : Window
         StatusText.Text = UiText.Ready(
             Viewport.MeshName,
             Viewport.VertexCount,
-            Viewport.TriangleCount,
-            Viewport.FrameMilliseconds);
+            Viewport.TriangleCount);
+        if (Viewport.MeshNotice.Length > 0)
+        {
+            StatusText.Text += "    " + Viewport.MeshNotice;
+        }
     }
 
     void OpenButton_Click(object sender, RoutedEventArgs e)
@@ -92,17 +125,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        Viewport.SetScale((float)ScaleSlider.Value, (float)StretchSlider.Value);
-    }
-
-    void StretchSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (!IsLoaded)
-        {
-            return;
-        }
-
-        Viewport.SetScale((float)ScaleSlider.Value, (float)StretchSlider.Value);
+        Viewport.SetScale((float)ScaleSlider.Value);
     }
 
     void ShowNotice(string text)
@@ -147,7 +170,6 @@ public partial class MainWindow : Window
     void ResetSliders()
     {
         ScaleSlider.Value = 1;
-        StretchSlider.Value = 1;
     }
 
     static bool HasModelFile(DragEventArgs e) => FirstModelFile(e) != null;

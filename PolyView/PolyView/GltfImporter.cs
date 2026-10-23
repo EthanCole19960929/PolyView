@@ -10,10 +10,32 @@ namespace PolyView;
 /// </summary>
 public static class GltfImporter
 {
+    /// <summary>普通文件直接交给 SharpGLTF；Draco 压缩的 GLB 先解压成普通 GLB 再读。</summary>
+    static ModelRoot Open(string path, ReadSettings settings)
+    {
+        if (Path.GetExtension(path).Equals(".glb", StringComparison.OrdinalIgnoreCase))
+        {
+            var bytes = File.ReadAllBytes(path);
+            if (DracoGlb.UsesDraco(bytes))
+            {
+                var decoded = DracoGlb.Decompress(bytes);
+                var directory = new DirectoryInfo(Path.GetDirectoryName(Path.GetFullPath(path)) ?? ".");
+                using var stream = new MemoryStream(decoded, writable: false);
+                return ReadContext.CreateFromDirectory(directory).WithSettingsFrom(settings).ReadBinarySchema2(stream);
+            }
+        }
+        else if (File.ReadAllText(path).Contains("KHR_draco_mesh_compression", StringComparison.Ordinal))
+        {
+            throw new DracoNotSupportedException("该 glTF 使用 Draco 压缩，目前只支持 Draco 压缩的 .glb，请用 .glb 版本。");
+        }
+
+        return ModelRoot.Load(path, settings);
+    }
+
     public static MeshData Load(string path)
     {
         var settings = new ReadSettings { Validation = SharpGLTF.Validation.ValidationMode.TryFix };
-        var model = ModelRoot.Load(path, settings);
+        var model = Open(path, settings);
 
         var vertices = new List<Vertex>();
         var indices = new List<uint>();
@@ -139,7 +161,7 @@ public static class GltfImporter
             local[i] = new Vertex(position, normal)
             {
                 TexCoord = uvs != null && i < uvs.Count ? uvs[i] : Vector2.Zero,
-                Color = baseColor * (colors != null && i < colors.Length ? colors[i] : Vector4.One),
+                Color = Vertex.PackColor(baseColor * (colors != null && i < colors.Length ? colors[i] : Vector4.One)),
             };
         }
 
@@ -285,3 +307,6 @@ public static class GltfImporter
         return (color, slot, channel.Value.TextureCoordinate);
     }
 }
+
+/// <summary>Draco 相关的失败（缺解码库、.gltf 外置 Draco 等），不再退回 Assimp，直接把原因显示出来。</summary>
+public sealed class DracoNotSupportedException(string message) : IOException(message);

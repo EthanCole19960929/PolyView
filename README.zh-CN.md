@@ -35,7 +35,9 @@
 > [!NOTE]
 > PolyView 目前处于**早期开发阶段（第 0 阶段）**。除路线图中已勾选的项目外，下列功能均为计划中。
 >
-> **目前已经能用：** 打开 OBJ / STL / GLB / glTF（读取全部网格和图元、按节点层级变换，带基础颜色贴图和顶点色；蒙皮模型按绑定姿态显示），把模型文件拖到窗口任意位置即可打开，鼠标旋转 / 平移 / 缩放。
+> **目前已经能用（master）：** 打开 OBJ / STL / GLB / glTF（读取全部网格和图元、按节点层级变换，带基础颜色贴图和顶点色；蒙皮模型按绑定姿态显示），把模型文件拖到窗口任意位置即可打开，鼠标旋转 / 平移 / 缩放。
+>
+> **`feat/import-xiaoB` 分支上：** FBX / DAE / three.js JSON、Draco 压缩的 GLB 和 WebP 贴图、Blender 式导航（中键、小键盘视图、正交）、地面网格、按需渲染和帧率显示。见[支持的格式](#-支持的格式)。
 
 ## ✨ 功能
 
@@ -48,6 +50,21 @@
 | 🌙 | **现代界面** | Fluent 设计、深色主题、可停靠面板 |
 | ⚡ | **内存稳定** | 打开大模型也不暴涨、不卡顿 |
 | 🖥️ | **高分屏适配** | 100% / 150% / 200% 缩放下视口清晰不变形 |
+
+## 📦 支持的格式
+
+「已支持（master）」= 已合并进 master；「已支持（feat/import-xiaoB）」= 只在小B的分支上，等 Ethan 合并；「开发中」= 正在写；「计划中」= 还没开始。详细说明和实测数据见 [docs/04_渲染原理与优化.md](docs/04_渲染原理与优化.md)。
+
+| 格式 | 导入方式 | 状态 | 说明 |
+| --- | --- | --- | --- |
+| .glb / .gltf | SharpGLTF（失败时退回 Assimp） | 已支持（master） | 多网格、节点变换、基础颜色贴图、顶点色、双面；蒙皮模型按绑定姿态 |
+| .obj (+.mtl) | 自带解析器；分支上 Assimp 优先 | 已支持（master） | 读 MTL 颜色和 map_Kd 贴图 |
+| .stl | 自带解析器 | 已支持（master） | 二进制 / ASCII；分支上 Z 朝上转成 Y 朝上 |
+| .fbx / .dae | Assimp 6.0.2（Silk.NET.Assimp） | 已支持（feat/import-xiaoB） | 节点变换、自动补法线、漫反射颜色和贴图（含 FBX 内嵌贴图） |
+| .3ds / .ply | Assimp | 已支持（feat/import-xiaoB），未专门测试 | 同上 |
+| three.js JSON（.json，`toJSON()` / 编辑器导出） | 自写解析器 | 已支持（feat/import-xiaoB） | 4.x 格式，BufferGeometry + Box / Sphere / Cylinder / Plane，节点 matrix，基础颜色。多数 three.js 项目发布的是 .glb / .gltf，已经能直接打开 |
+| GLB + KHR_draco_mesh_compression | Google Draco 1.5.7 解码库（Apache-2.0，从源码编译） | 已支持（feat/import-xiaoB），只支持 .glb | 解压后重写 GLB 再交给 SharpGLTF |
+| GLB + EXT_texture_webp | SharpGLTF + Windows WIC | 已支持（feat/import-xiaoB） | 系统有 WebP 解码器时显示贴图，没有时安全跳过 |
 
 ## 🛠️ 技术栈
 
@@ -129,7 +146,8 @@ dotnet run --project PolyView/PolyView.csproj
     ├── AGENTS.md            # 接手说明与文档索引
     ├── 01_开发计划说明.md
     ├── 02_动作资源网站.md
-    └── 03_3D显示原理与优化.md
+    ├── 03_3D显示原理与优化.md
+    └── 04_渲染原理与优化.md
 ```
 
 ## 🧩 测试模型

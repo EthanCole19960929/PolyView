@@ -11,7 +11,8 @@
         AllowDrop="True"
         DragEnter="Window_DragEnter"
         DragOver="Window_DragOver"
-        Drop="Window_Drop">
+        Drop="Window_Drop"
+        PreviewKeyDown="Window_PreviewKeyDown">
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="#FF2A2D34" Padding="10,8">
             <WrapPanel VerticalAlignment="Center">
@@ -20,9 +21,8 @@
                 <Button x:Name="LanguageButton" MinWidth="72" Margin="0,0,16,0" Padding="12,4" Click="LanguageButton_Click"/>
                 <TextBlock x:Name="ScaleLabel" Foreground="#FFE6E6E6" VerticalAlignment="Center"/>
                 <Slider x:Name="ScaleSlider" Width="120" Minimum="0.2" Maximum="3" Value="1" Margin="8,0,16,0" VerticalAlignment="Center" ValueChanged="ScaleSlider_ValueChanged"/>
-                <TextBlock x:Name="StretchLabel" Foreground="#FFE6E6E6" VerticalAlignment="Center"/>
-                <Slider x:Name="StretchSlider" Width="120" Minimum="0.2" Maximum="3" Value="1" Margin="8,0,16,0" VerticalAlignment="Center" ValueChanged="StretchSlider_ValueChanged"/>
                 <TextBlock x:Name="StatusText" Foreground="#FFC8C8C8" VerticalAlignment="Center"/>
+                <TextBlock x:Name="FpsText" Foreground="#FF9AD08A" Margin="16,0,0,0" VerticalAlignment="Center"/>
             </WrapPanel>
         </Border>
         <TextBlock x:Name="HintText" DockPanel.Dock="Bottom" Margin="12,8" Foreground="#FFB5B5B5"/>

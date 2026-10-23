@@ -15,6 +15,7 @@ public sealed class SceneRenderer : IDisposable
             float4x4 WorldViewProj;
             float4x4 NormalWorld;
             float3 LightDirection;
+            float Unlit;
         };
 
         Texture2D BaseColorMap : register(t0);
@@ -48,17 +49,22 @@ public sealed class SceneRenderer : IDisposable
 
         float4 PSMain(VsOut input, bool frontFace : SV_IsFrontFace) : SV_Target
         {
+            if (Unlit > 0.5)
+            {
+                return input.Color;
+            }
+
             float3 normal = normalize(input.Normal);
             if (!frontFace)
             {
                 normal = -normal;
             }
 
+            // 主光跟着相机（右上方斜照），再加天空 / 地面半球环境光，背光面也不会比背景还黑。
             float key = saturate(dot(normal, LightDirection));
-            float fill = saturate(dot(normal, normalize(float3(-0.5, 0.2, -0.6)))) * 0.25;
+            float hemisphere = lerp(0.32, 0.55, normal.y * 0.5 + 0.5);
             float4 albedo = BaseColorMap.Sample(BaseColorSampler, input.TexCoord) * input.Color;
-            float3 tint = float3(0.73, 0.77, 0.82);
-            float3 color = albedo.rgb * tint * (0.25 + 0.75 * key + fill) * 1.25;
+            float3 color = albedo.rgb * (hemisphere + 0.75 * key);
             return float4(saturate(color), 1);
         }
         """;
@@ -79,6 +85,8 @@ public sealed class SceneRenderer : IDisposable
     readonly ID3D11ShaderResourceView _whiteView;
     readonly List<(ID3D11Texture2D Texture, ID3D11ShaderResourceView View)> _meshTextures = [];
     MeshPart[] _parts = [];
+    ID3D11Buffer? _gridVertices;
+    uint _gridVertexCount;
     readonly ID3D11ShaderResourceView[] _textureSlot = new ID3D11ShaderResourceView[1];
     readonly ID3D11SamplerState[] _samplerSlot = new ID3D11SamplerState[1];
     ID3D11Texture2D? _color;
@@ -117,7 +125,7 @@ public sealed class SceneRenderer : IDisposable
                 new InputElementDescription("POSITION", 0, Format.R32G32B32_Float, 0, 0),
                 new InputElementDescription("NORMAL", 0, Format.R32G32B32_Float, 12, 0),
                 new InputElementDescription("TEXCOORD", 0, Format.R32G32_Float, 24, 0),
-                new InputElementDescription("COLOR", 0, Format.R32G32B32A32_Float, 32, 0),
+                new InputElementDescription("COLOR", 0, Format.R8G8B8A8_UNorm, 32, 0),
             ],
             bytecode);
         _constants = device.CreateBuffer(
@@ -206,6 +214,44 @@ public sealed class SceneRenderer : IDisposable
         _parts = mesh.Parts.Length > 0
             ? mesh.Parts
             : [new MeshPart { StartIndex = 0, IndexCount = mesh.Indices.Length }];
+        BuildGrid(mesh.Min, mesh.Max);
+    }
+
+    /// <summary>
+    /// Blender 式地面网格：在 y = 0 平面上，红线是 X 轴，绿线是 Z 轴（对应 Blender 的 Y 轴）。
+    /// 格子间距取 10 的整数次幂，按模型大小自动选，范围盖住模型。
+    /// </summary>
+    void BuildGrid(Vector3 min, Vector3 max)
+    {
+        _gridVertices?.Dispose();
+        _gridVertices = null;
+        float size = MathF.Max(MathF.Max(max.X - min.X, max.Z - min.Z), max.Y - min.Y);
+        size = MathF.Max(size, 1e-4f);
+        float step = MathF.Pow(10f, MathF.Floor(MathF.Log10(size / 4f)));
+        float reach = MathF.Max(MathF.Max(MathF.Abs(min.X), MathF.Abs(max.X)), MathF.Max(MathF.Abs(min.Z), MathF.Abs(max.Z)));
+        int half = Math.Clamp((int)MathF.Ceiling(MathF.Max(reach, size) * 1.5f / step), 5, 400);
+        float extent = half * step;
+        uint minor = Vertex.PackColor(new Vector4(0.30f, 0.31f, 0.33f, 1f));
+        uint major = Vertex.PackColor(new Vector4(0.38f, 0.39f, 0.41f, 1f));
+        uint red = Vertex.PackColor(new Vector4(0.80f, 0.25f, 0.28f, 1f));
+        uint green = Vertex.PackColor(new Vector4(0.45f, 0.70f, 0.20f, 1f));
+        var lines = new List<Vertex>((half * 2 + 1) * 4);
+        for (int i = -half; i <= half; i++)
+        {
+            float t = i * step;
+            uint along = i == 0 ? red : (i % 10 == 0 ? major : minor);
+            uint across = i == 0 ? green : (i % 10 == 0 ? major : minor);
+            // 平行于 X 的线（z = t），z = 0 那条就是红色 X 轴。
+            lines.Add(new Vertex(new Vector3(-extent, 0, t), Vector3.UnitY) { Color = along });
+            lines.Add(new Vertex(new Vector3(extent, 0, t), Vector3.UnitY) { Color = along });
+            // 平行于 Z 的线（x = t），x = 0 那条就是绿色轴。
+            lines.Add(new Vertex(new Vector3(t, 0, -extent), Vector3.UnitY) { Color = across });
+            lines.Add(new Vertex(new Vector3(t, 0, extent), Vector3.UnitY) { Color = across });
+        }
+
+        var array = lines.ToArray();
+        _gridVertices = _device.CreateBuffer(array, BindFlags.VertexBuffer);
+        _gridVertexCount = (uint)array.Length;
     }
 
     public void Resize(int pixelWidth, int pixelHeight)
@@ -251,6 +297,8 @@ public sealed class SceneRenderer : IDisposable
         _depthView = _device.CreateDepthStencilView(_depth);
     }
 
+    public bool ShowGrid { get; set; } = true;
+
     public void Render(in OrbitCamera camera, in Vector3 scale, float meshRadius)
     {
         if (_colorView == null || _depthView == null)
@@ -259,23 +307,29 @@ public sealed class SceneRenderer : IDisposable
         }
 
         float aspect = _pixelWidth / (float)_pixelHeight;
-        var world = Matrix4x4.CreateScale(scale);
-        var view = Matrix4x4.CreateLookAt(camera.Eye, camera.Target, Vector3.UnitY);
-        float near = MathF.Max(0.01f, camera.Distance * 0.01f);
-        float far = MathF.Max(near + 1f, camera.Distance + meshRadius * 8f);
-        var projection = Matrix4x4.CreatePerspectiveFieldOfView(camera.FieldOfView, aspect, near, far);
-        Matrix4x4.Invert(world, out var inverseWorld);
-        var constants = new FrameConstants
+        var eye = camera.Eye;
+        var view = Matrix4x4.CreateLookAt(eye, camera.Target, Vector3.UnitY);
+        // 近 / 远平面跟着相机距离和模型大小走，深度精度够用，也不会把模型裁掉。
+        float scaledRadius = meshRadius * MathF.Max(scale.X, MathF.Max(scale.Y, scale.Z));
+        float near = MathF.Max(camera.Distance * 0.002f, (camera.Distance - scaledRadius * 4f) * 0.5f);
+        float far = camera.Distance + scaledRadius * 20f + 1e-3f;
+        Matrix4x4 projection;
+        if (camera.Orthographic)
         {
-            // System.Numerics 是行向量约定；HLSL 常量缓冲默认按列主序读取，再配合 mul(M, v)，
-            // 所以这里直接上传原矩阵（不转置），否则投影会被打乱、什么都画不出来。
-            WorldViewProj = world * view * projection,
-            NormalWorld = Matrix4x4.Transpose(inverseWorld),
-            LightDirection = Vector3.Normalize(new Vector3(0.35f, 0.8f, 0.5f)),
-        };
-        var mapped = _context.Map(_constants, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
-        Marshal.StructureToPtr(constants, mapped.DataPointer, false);
-        _context.Unmap(_constants, 0);
+            float halfHeight = camera.OrthoHalfHeight;
+            projection = Matrix4x4.CreateOrthographic(halfHeight * 2f * aspect, halfHeight * 2f, -far, far);
+        }
+        else
+        {
+            projection = Matrix4x4.CreatePerspectiveFieldOfView(camera.FieldOfView, aspect, near, far);
+        }
+
+        // 主光从相机右上方照过来：随视角转，任何角度看过去正面都是亮的。
+        var forward = Vector3.Normalize(camera.Target - eye);
+        var right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY));
+        var up = Vector3.Cross(right, forward);
+        var light = Vector3.Normalize(-forward + right * 0.45f + up * 0.75f);
+        var viewProjection = view * projection;
 
         _context.ClearRenderTargetView(_colorView, new Color4(0.11f, 0.12f, 0.14f, 1f));
         _context.ClearDepthStencilView(_depthView, DepthStencilClearFlags.Depth, 1f, 0);
@@ -291,11 +345,25 @@ public sealed class SceneRenderer : IDisposable
         _constantSlot[0] = _constants;
         _context.VSSetConstantBuffers(0, 1, _constantSlot);
         _context.PSSetConstantBuffers(0, 1, _constantSlot);
+        _stride[0] = (uint)Marshal.SizeOf<Vertex>();
+        _offset[0] = 0;
+        if (ShowGrid && _gridVertices != null)
+        {
+            WriteConstants(Matrix4x4.Identity, viewProjection, light, unlit: true);
+            _context.RSSetState(_doubleSidedRasterizer);
+            _context.IASetPrimitiveTopology(PrimitiveTopology.LineList);
+            _vertexSlot[0] = _gridVertices;
+            _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
+            _textureSlot[0] = _whiteView;
+            _context.PSSetShaderResources(0, 1, _textureSlot);
+            _context.Draw(_gridVertexCount, 0);
+            _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        }
+
         if (_vertices != null && _indices != null && _indexCount > 0)
         {
+            WriteConstants(Matrix4x4.CreateScale(scale), viewProjection, light, unlit: false);
             _vertexSlot[0] = _vertices;
-            _stride[0] = (uint)Marshal.SizeOf<Vertex>();
-            _offset[0] = 0;
             _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
             _context.IASetIndexBuffer(_indices, Format.R32_UInt, 0);
             _samplerSlot[0] = _sampler;
@@ -321,10 +389,57 @@ public sealed class SceneRenderer : IDisposable
         _context.Flush();
     }
 
+    /// <summary>直接写进映射的常量缓冲，不经过 Marshal.StructureToPtr（它会装箱，每帧产生垃圾）。</summary>
+    unsafe void WriteConstants(in Matrix4x4 world, in Matrix4x4 viewProjection, Vector3 light, bool unlit)
+    {
+        Matrix4x4.Invert(world, out var inverseWorld);
+        var mapped = _context.Map(_constants, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
+        var constants = (FrameConstants*)mapped.DataPointer;
+        // System.Numerics 是行向量约定（v * M）；HLSL 常量缓冲默认按列主序读取，配合 mul(M, v)
+        // 正好等价于 v * M，所以 WorldViewProj 直接上传、不转置。转置 + mul(M, v) 会让投影错乱（之前视口全黑的原因）。
+        constants->WorldViewProj = world * viewProjection;
+        constants->NormalWorld = Matrix4x4.Transpose(inverseWorld);
+        constants->LightDirection = light;
+        constants->Unlit = unlit ? 1f : 0f;
+        _context.Unmap(_constants, 0);
+    }
+
+    ID3D11Query? _gpuIdleQuery;
+
+    /// <summary>等 GPU 把已提交的命令全部做完（只给性能测试用，正常渲染不调用）。</summary>
+    public void WaitForGpu()
+    {
+        _gpuIdleQuery ??= _device.CreateQuery(new QueryDescription(QueryType.Event));
+        _context.End(_gpuIdleQuery);
+        _context.Flush();
+        while (!_context.IsDataAvailable(_gpuIdleQuery))
+        {
+            Thread.SpinWait(64);
+        }
+    }
+
+    public string AdapterName
+    {
+        get
+        {
+            try
+            {
+                using var dxgiDevice = _device.QueryInterface<IDXGIDevice>();
+                using var adapter = dxgiDevice.GetAdapter();
+                return adapter.Description.Description;
+            }
+            catch (Exception)
+            {
+                return DeviceName;
+            }
+        }
+    }
+
     public void Dispose()
     {
         _vertices?.Dispose();
         _indices?.Dispose();
+        _gridVertices?.Dispose();
         _colorView?.Dispose();
         _color?.Dispose();
         _depthView?.Dispose();
@@ -447,6 +562,6 @@ public sealed class SceneRenderer : IDisposable
         public Matrix4x4 WorldViewProj;
         public Matrix4x4 NormalWorld;
         public Vector3 LightDirection;
-        public float Pad;
+        public float Unlit;
     }
 }

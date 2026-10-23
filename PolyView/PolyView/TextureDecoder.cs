@@ -30,7 +30,7 @@ public static class TextureDecoder
             source.CopyPixels(pixels, width * 4, 0);
             return new MeshTexture { Width = width, Height = height, Bgra = pixels };
         }
-        catch (Exception ex) when (ex is NotSupportedException or FileFormatException or ArgumentException or InvalidOperationException or OverflowException)
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException or ArgumentException or InvalidOperationException or OverflowException or System.Runtime.InteropServices.COMException)
         {
             return null;
         }
