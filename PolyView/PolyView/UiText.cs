@@ -12,11 +12,9 @@ public static class UiText
 
     public static string Language => Chinese ? "English" : "中文";
 
-    public static string Scale => Chinese ? "缩放" : "Scale";
-
     public static string Hint => Chinese
-        ? "拖入或打开 OBJ / STL / GLB / glTF / FBX / DAE / three.js JSON。中键旋转（或左键），Shift+中键平移，滚轮或 Ctrl+中键缩放；Home / 小键盘 . 框选全部，小键盘 1 / 3 / 7 前 / 右 / 顶视图（加 Ctrl 看反面），小键盘 5 透视 / 正交。"
-        : "Drag in or open an OBJ, STL, GLB, glTF, FBX, DAE or three.js JSON file. Middle-drag (or left-drag) to orbit, Shift+middle-drag to pan, and scroll or Ctrl+middle-drag to zoom. Press Home or Numpad . to frame everything, Numpad 1 / 3 / 7 for the front, right and top views (add Ctrl for the opposite side), and Numpad 5 to switch between perspective and orthographic.";
+        ? "拖入或打开 OBJ / STL / GLB / glTF / FBX / DAE / three.js JSON。中键旋转（无中键时 Alt+左键），Shift+中键平移（或 Alt+Shift+左键），滚轮或 Ctrl+中键缩放；Home / 小键盘 . 框选全部，小键盘 1 / 3 / 7 前 / 右 / 顶视图（加 Ctrl 看反面），小键盘 5 透视 / 正交。"
+        : "Drag in or open an OBJ, STL, GLB, glTF, FBX, DAE or three.js JSON file. Middle-drag (or Alt+left-drag) to orbit, Shift+middle-drag (or Alt+Shift+left-drag) to pan, and scroll or Ctrl+middle-drag to zoom. Press Home or Numpad . to frame everything, Numpad 1 / 3 / 7 for the front, right and top views (add Ctrl for the opposite side), and Numpad 5 to switch between perspective and orthographic.";
 
     public static string Reading => Chinese ? "正在读取…" : "Reading…";
 
