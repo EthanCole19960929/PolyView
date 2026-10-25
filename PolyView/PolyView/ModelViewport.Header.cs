@@ -9,8 +9,6 @@ namespace PolyView;
 public sealed partial class ModelViewport
 {
     public const double HeaderHeight = 30;
-    readonly MenuItem _hdrEditor = new();
-    readonly MenuItem _hdrMode = new();
     readonly MenuItem _hdrView = new();
     readonly MenuItem _hdrSelect = new();
     readonly MenuItem _hdrAdd = new();
@@ -20,14 +18,7 @@ public sealed partial class ModelViewport
     UIElement BuildViewportHeader()
     {
         var menu = new Menu { Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
-        // Editor type: icon + small arrow, like Blender.
-        _hdrEditor.Header = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Children = { LineIcon("mesh"), new TextBlock { Text = " ▾", Foreground = MenuGreyBrush, FontSize = 10, VerticalAlignment = VerticalAlignment.Center } },
-        };
-        // Mode dropdown: a rounded "button" look.
-        _hdrMode.Header = new Border
+        var modeLabel = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0x54, 0x54, 0x54)),
             CornerRadius = new CornerRadius(4),
@@ -35,12 +26,12 @@ public sealed partial class ModelViewport
             Child = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Children = { LineIcon("cube"), new TextBlock { Width = 4 }, _hdrModeText, new TextBlock { Text = "  ▾", Foreground = MenuGreyBrush, FontSize = 10, VerticalAlignment = VerticalAlignment.Center } },
+                Children = { LineIcon("cube"), new TextBlock { Width = 4 }, _hdrModeText },
             },
         };
         foreach (var (item, fill) in new (MenuItem, Action<ItemCollection>)[]
         {
-            (_hdrEditor, FillEditorMenu), (_hdrMode, FillModeMenu), (_hdrView, FillViewMenu),
+            (_hdrView, FillViewMenu),
             (_hdrSelect, FillSelectMenu), (_hdrAdd, PopulateBlenderAddMenu), (_hdrObject, FillObjectMenu),
         })
         {
@@ -58,6 +49,10 @@ public sealed partial class ModelViewport
             menu.Items.Add(item);
         }
 
+        var headerContent = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        headerContent.Children.Add(modeLabel);
+        headerContent.Children.Add(menu);
+
         ApplyHeaderLanguage();
         return new Border
         {
@@ -67,7 +62,7 @@ public sealed partial class ModelViewport
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x16)),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(4, 0, 0, 0),
-            Child = menu,
+            Child = headerContent,
         };
     }
 
@@ -79,7 +74,6 @@ public sealed partial class ModelViewport
         _hdrSelect.Header = UiText.HdrSelect;
         _hdrAdd.Header = UiText.AddTitle;
         _hdrObject.Header = UiText.HdrObject;
-        _hdrEditor.ToolTip = UiText.HdrEditorType;
     }
 
     static MenuItem Item(string header, Action? click, string? gesture = null, bool check = false)
@@ -93,32 +87,8 @@ public sealed partial class ModelViewport
         return item;
     }
 
-    void FillEditorMenu(ItemCollection items)
-    {
-        items.Add(Item(UiText.Hdr3DViewport, () => { }, "Shift F5", check: true));
-        items.Add(Item(UiText.HdrImageEditor, null, "Shift F10"));
-        items.Add(Item(UiText.HdrShaderEditor, null, "Shift F3"));
-        items.Add(Item(UiText.HdrTimeline, null, "Shift F12"));
-        items.Add(new Separator());
-        items.Add(Item(UiText.HdrOutliner, null, "Shift F9"));
-        items.Add(Item(UiText.HdrProperties, null, "Shift F7"));
-    }
-
-    void FillModeMenu(ItemCollection items)
-    {
-        items.Add(Item(UiText.HdrObjectMode, () => { }, check: true));
-        items.Add(Item(UiText.HdrEditMode, null, "Tab"));
-        items.Add(Item(UiText.HdrSculptMode, null));
-        items.Add(Item(UiText.HdrVertexPaint, null));
-        items.Add(Item(UiText.HdrWeightPaint, null));
-        items.Add(Item(UiText.HdrTexturePaint, null));
-    }
-
     void FillViewMenu(ItemCollection items)
     {
-        items.Add(Item(UiText.HdrToolbar, null, "T"));
-        items.Add(Item(UiText.HdrSidebar, null, "N"));
-        items.Add(new Separator());
         items.Add(Item(UiText.HdrFrameSelected, _selectedId >= 0 ? FrameSelected : null, "Numpad ."));
         items.Add(Item(UiText.HdrFrameAll, _objects.Count > 0 ? FrameAll : null, "Home"));
         items.Add(new Separator());
@@ -139,12 +109,7 @@ public sealed partial class ModelViewport
 
     void FillSelectMenu(ItemCollection items)
     {
-        // Selection is single-object for now: All / Invert need multi-select.
-        items.Add(Item(UiText.HdrSelectAll, null, "A"));
         items.Add(Item(UiText.HdrSelectNone, _selectedId >= 0 ? () => Select(-1) : null, "Alt A"));
-        items.Add(Item(UiText.HdrSelectInvert, null, "Ctrl I"));
-        items.Add(new Separator());
-        items.Add(Item(UiText.HdrSelectBox, null, "B"));
     }
 
     void FillObjectMenu(ItemCollection items)
@@ -155,11 +120,7 @@ public sealed partial class ModelViewport
         t.Items.Add(Item(UiText.HdrRotate, sel ? () => ViewKey(Key.R, ModifierKeys.None) : null, "R"));
         t.Items.Add(Item(UiText.HdrScale, sel ? () => ViewKey(Key.S, ModifierKeys.None) : null, "S"));
         items.Add(t);
-        items.Add(Item(UiText.HdrApply, null, "Ctrl A"));
-        items.Add(Item(UiText.HdrSnap, null, "Shift S"));
-        items.Add(new Separator());
-        items.Add(Item(UiText.HdrDuplicate, sel && _primitiveSpecs.ContainsKey(_selectedId) ? () => DuplicateSelected() : null, "Shift D"));
-        items.Add(Item(UiText.HdrParent, null, "Ctrl P"));
+        items.Add(Item(UiText.HdrDuplicate, sel ? () => DuplicateAndMove(linked: false) : null, "Shift D"));
         items.Add(new Separator());
         var sh = new MenuItem { Header = UiText.HdrShowHide };
         sh.Items.Add(Item(UiText.HdrShowHidden, _objects.Any(o => !o.Visible) ? ShowAllHidden : null, "Alt H"));

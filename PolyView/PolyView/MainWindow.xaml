@@ -29,9 +29,7 @@
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Menu Background="Transparent" VerticalAlignment="Center">
                     <MenuItem x:Name="MenuFile">
-                        <MenuItem x:Name="MenuNew" IsEnabled="False" InputGestureText="Ctrl+N"/>
                         <MenuItem x:Name="MenuOpen" InputGestureText="Ctrl+O" Click="OpenButton_Click"/>
-                        <MenuItem x:Name="MenuRecent" IsEnabled="False"/>
                         <Separator/>
                         <MenuItem x:Name="MenuSave" IsEnabled="False" InputGestureText="Ctrl+S"/>
                         <Separator/>
@@ -49,21 +47,12 @@
                         <MenuItem x:Name="MenuLanguage" Click="LanguageButton_Click"/>
                         <MenuItem x:Name="MenuPreferences" IsEnabled="False"/>
                     </MenuItem>
-                    <MenuItem x:Name="MenuRender">
-                        <MenuItem x:Name="MenuRenderImage" IsEnabled="False" InputGestureText="F12"/>
-                        <MenuItem x:Name="MenuRenderAnimation" IsEnabled="False" InputGestureText="Ctrl+F12"/>
-                        <Separator/>
-                        <MenuItem x:Name="MenuViewRender" IsEnabled="False" InputGestureText="F11"/>
-                    </MenuItem>
                     <MenuItem x:Name="MenuWindow">
-                        <MenuItem x:Name="MenuNewWindow" IsEnabled="False"/>
                         <MenuItem x:Name="MenuFullscreen" InputGestureText="Ctrl+Alt+Space" Click="MenuFullscreen_Click"/>
                         <Separator/>
                         <MenuItem x:Name="MenuProjection" InputGestureText="Numpad 5" Click="MenuProjection_Click"/>
                     </MenuItem>
                     <MenuItem x:Name="MenuHelp">
-                        <MenuItem x:Name="MenuManual" IsEnabled="False"/>
-                        <Separator/>
                         <MenuItem x:Name="MenuAbout" Click="MenuAbout_Click"/>
                     </MenuItem>
                     <MenuItem x:Name="MenuMcp"/>

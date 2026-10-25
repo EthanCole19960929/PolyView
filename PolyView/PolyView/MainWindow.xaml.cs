@@ -54,9 +54,7 @@ public partial class MainWindow : Window
         Title = UiText.WindowTitle;
         ApplyProjectLanguage();
         MenuFile.Header = UiText.MenuFile;
-        MenuNew.Header = UiText.MenuNew;
         MenuOpen.Header = UiText.MenuOpen;
-        MenuRecent.Header = UiText.MenuRecent;
         MenuSave.Header = UiText.MenuSave;
         MenuImport.Header = UiText.MenuImport;
         MenuExport.Header = UiText.MenuExport;
@@ -68,18 +66,10 @@ public partial class MainWindow : Window
         MenuLanguage.Header = UiText.MenuLanguage;
         MenuPreferences.Header = UiText.MenuPreferences;
         Viewport.ApplyHeaderLanguage();
-        
-        
-        MenuRender.Header = UiText.MenuRender;
-        MenuRenderImage.Header = UiText.MenuRenderImage;
-        MenuRenderAnimation.Header = UiText.MenuRenderAnimation;
-        MenuViewRender.Header = UiText.MenuViewRender;
         MenuWindow.Header = UiText.MenuWindow;
-        MenuNewWindow.Header = UiText.MenuNewWindow;
         MenuFullscreen.Header = UiText.MenuFullscreen;
         MenuProjection.Header = UiText.MenuProjection;
         MenuHelp.Header = UiText.MenuHelp;
-        MenuManual.Header = UiText.MenuManual;
         MenuAbout.Header = UiText.MenuAbout;
         BuildWorkspaceTabs();
         HintText.Text = ""; // status bar hint removed (Blender keeps the left side empty)

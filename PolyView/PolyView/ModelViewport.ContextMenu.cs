@@ -9,7 +9,7 @@ namespace PolyView;
 /// <summary>
 /// Blender 4.2 viewport right-click Object Context Menu (object mode) and its shortcuts:
 /// shading (smooth / auto smooth / flat), set origin, copy / paste, duplicate (Shift D) / linked duplicate (Alt D),
-/// rename (F2), mirror, snap, move to collection (M), delete (X). Parent / Convert / keyframes are shown disabled (deferred).
+/// rename (F2), mirror, snap, move to collection (M), and delete (X).
 /// Every action is also a [PvCommand] (Core/Commands/ObjectMenuCommands.cs).
 /// </summary>
 public sealed partial class ModelViewport
@@ -70,14 +70,6 @@ public sealed partial class ModelViewport
         menu.IsOpen = true;
     }
 
-    static MenuItem Deferred(string header, string? gesture = null)
-    {
-        var item = Item(header, null, gesture);
-        item.ToolTip = Z("暂未实现（后续开发）", "Not implemented yet");
-        ToolTipService.SetShowOnDisabled(item, true);
-        return item;
-    }
-
     void FillObjectContextMenu(ItemCollection items)
     {
         bool sel = _selectedId >= 0;
@@ -88,12 +80,6 @@ public sealed partial class ModelViewport
         items.Add(Item(Z("自动平滑着色", "Shade Auto Smooth"), mesh ? () => ShadeSelected(ShadeMode.Auto) : null));
         items.Add(Item(Z("平直着色", "Shade Flat"), mesh ? () => ShadeSelected(ShadeMode.Flat) : null));
         items.Add(new Separator());
-
-        var convert = new MenuItem { Header = Z("转换为", "Convert") };
-        convert.Items.Add(Deferred(Z("网格", "Mesh")));
-        convert.Items.Add(Deferred(Z("曲线", "Curve")));
-        convert.Items.Add(Deferred(Z("蜡笔", "Grease Pencil")));
-        items.Add(convert);
 
         var origin = new MenuItem { Header = Z("设置原点", "Set Origin") };
         origin.Items.Add(Item(Z("原点 -> 几何中心", "Origin to Geometry"), mesh ? () => SetOriginSelected(OriginMode.OriginToGeometry) : null));
@@ -124,11 +110,6 @@ public sealed partial class ModelViewport
         snap.Items.Add(Item(Z("游标 -> 世界原点", "Cursor to World Origin"), () => Snap(SnapMode.CursorToWorld)));
         items.Add(snap);
 
-        var parent = new MenuItem { Header = Z("父级", "Parent") };
-        parent.Items.Add(Deferred(Z("设置父级目标", "Object"), "Ctrl P"));
-        parent.Items.Add(Deferred(Z("清除父级", "Clear Parent"), "Alt P"));
-        items.Add(parent);
-
         var move = Item(Z("移动至集合", "Move to Collection"),
             sel && MoveToCollectionRequested != null ? () => MoveToCollectionRequested?.Invoke(this, false) : null, "M");
         if (!move.IsEnabled)
@@ -138,9 +119,6 @@ public sealed partial class ModelViewport
         }
 
         items.Add(move);
-        items.Add(new Separator());
-        items.Add(Deferred(Z("插入关键帧", "Insert Keyframe"), "I"));
-        items.Add(Deferred(Z("使用插帧集插入关键帧...", "Insert Keyframe with Keying Set..."), "K"));
         items.Add(new Separator());
         items.Add(Item(Z("删除", "Delete"), sel ? () => DeleteSelectedConfirm() : null, "X"));
     }

@@ -33,22 +33,13 @@ public sealed class PropertiesEditor : UserControl
         return brush;
     }
 
-    public enum Tab { Tool, Render, Output, ViewLayer, Scene, World, Object, Modifiers, Particles, Physics, Constraints, Data, Material }
+    public enum Tab { Scene, Object, Data, Material }
 
     // icon geometry (16x16) and tint per tab
     static readonly Dictionary<Tab, (string Geo, Brush Color, string Zh, string En)> TabInfo = new()
     {
-        [Tab.Tool] = ("M3,13 L9,7 M8,3 A3,3 0 1 0 13,8 L10,8 L8,6 Z M12,3 L12,6", Frozen(0xC8, 0xC8, 0xC8), "工具", "Tool"),
-        [Tab.Render] = ("M2,5 H14 V13 H2 Z M5,5 V3 H11 V5 M8,9 m-2,0 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0", Frozen(0xC8, 0xC8, 0xC8), "渲染", "Render"),
-        [Tab.Output] = ("M2,3 H14 V10 H2 Z M5,13 H11 M8,10 V13", Frozen(0xC8, 0xC8, 0xC8), "输出", "Output"),
-        [Tab.ViewLayer] = ("M3,3 H11 V11 H3 Z M5,5 H13 V13 H5", Frozen(0xC8, 0xC8, 0xC8), "视图层", "View Layer"),
         [Tab.Scene] = ("M4,12 A2.5,2.5 0 1 1 4,11.99 M10,4 L14,11 H6 Z", Frozen(0xC8, 0xC8, 0xC8), "场景", "Scene"),
-        [Tab.World] = ("M8,2 A6,6 0 1 1 7.99,2 M2,8 H14 M8,2 C5,5 5,11 8,14 C11,11 11,5 8,2", Frozen(0xE0, 0x6C, 0x6C), "世界环境", "World"),
         [Tab.Object] = ("M3,3 H13 V13 H3 Z M6,6 H10 V10 H6 Z", Orange, "物体", "Object"),
-        [Tab.Modifiers] = ("M3,13 L9,7 M8,3 A3,3 0 1 0 13,8 L10,8 L8,6 Z", Frozen(0x6A, 0x9B, 0xE8), "修改器", "Modifiers"),
-        [Tab.Particles] = ("M4,4 A1.5,1.5 0 1 1 3.99,4 M12,6 A1.5,1.5 0 1 1 11.99,6 M7,12 A1.5,1.5 0 1 1 6.99,12 M4,4 L12,6 L7,12", Frozen(0x6A, 0x9B, 0xE8), "粒子", "Particles"),
-        [Tab.Physics] = ("M8,2 A6,6 0 1 1 7.99,2 M8,5 A3,3 0 1 1 7.99,5", Frozen(0x6A, 0x9B, 0xE8), "物理", "Physics"),
-        [Tab.Constraints] = ("M3,10 A3,3 0 1 1 9,10 A3,3 0 1 1 3,10 M7,6 A3,3 0 1 1 13,6 A3,3 0 1 1 7,6", Frozen(0x6A, 0x9B, 0xE8), "物体约束", "Object Constraints"),
         [Tab.Data] = ("M8,2 L14,13 H2 Z M8,2 V13 M5,8 H11", Green, "数据", "Data"),
         [Tab.Material] = ("M8,2 A6,6 0 1 1 7.99,2 M8,2 V14 M2,8 H14", Frozen(0xE0, 0x6C, 0x6C), "材质", "Material"),
     };
@@ -218,7 +209,6 @@ public sealed class PropertiesEditor : UserControl
             case Tab.Data: BuildData(id); break;
             case Tab.Material: BuildMaterial(id); break;
             case Tab.Scene: BuildScene(); break;
-            default: BuildPlaceholders(_tab); break;
         }
 
         ApplyOrder();
@@ -229,8 +219,8 @@ public sealed class PropertiesEditor : UserControl
     {
         _tabs.Children.Clear();
         Tab[][] groups = hasObject
-            ? [[Tab.Tool], [Tab.Render, Tab.Output, Tab.ViewLayer, Tab.Scene, Tab.World], [Tab.Object, Tab.Modifiers, Tab.Particles, Tab.Physics, Tab.Constraints, Tab.Data], [Tab.Material]]
-            : [[Tab.Tool], [Tab.Render, Tab.Output, Tab.ViewLayer, Tab.Scene, Tab.World]];
+            ? [[Tab.Scene], [Tab.Object, Tab.Data], [Tab.Material]]
+            : [[Tab.Scene]];
         foreach (var group in groups)
         {
             foreach (var t in group)
@@ -302,12 +292,6 @@ public sealed class PropertiesEditor : UserControl
         }
 
         return new Panel(key, root, body);
-    }
-
-    void Placeholder(string zh, string en)
-    {
-        var p = AddPanel(zh, en, false);
-        p.Body.Children.Add(new TextBlock { Text = UiText.T("（暂未实现）", "(Not implemented yet)"), Foreground = DimText, Margin = new Thickness(8, 2, 0, 2) });
     }
 
     void HookReorder(FrameworkElement grip, Border root)
@@ -475,22 +459,10 @@ public sealed class PropertiesEditor : UserControl
             }
         }
 
-        var delta = AddPanel("增量变换", "Delta Transform", false, transform);
-        delta.Body.Children.Add(new TextBlock { Text = UiText.T("（暂未实现）", "(Not implemented yet)"), Foreground = DimText, Margin = new Thickness(8, 2, 0, 2) });
-
-        Placeholder("关系", "Relations");
-        Placeholder("集合", "Collections");
-        Placeholder("实例化", "Instancing");
-        Placeholder("运动路径", "Motion Paths");
-        Placeholder("着色方式", "Shading");
         var vis = AddPanel("可见性", "Visibility", false);
         var show = Check(UiText.T("在视图中显示", "Show in Viewports"), info.Visible, v => vp.SetObjectVisible(id, v));
         vis.Body.Children.Add(show);
         _updaters.Add(() => { if (vp.TryGetObjectInfo(id, out var i) && show.IsChecked != i.Visible) show.IsChecked = i.Visible; });
-        Placeholder("视图显示", "Viewport Display");
-        Placeholder("线条画", "Line Art");
-        Placeholder("动画", "Animation");
-        Placeholder("自定义属性", "Custom Properties");
     }
 
     static string Trim(double v, int decimals) => Math.Round(v, decimals).ToString("0.#####", CultureInfo.InvariantCulture);
@@ -575,12 +547,6 @@ public sealed class PropertiesEditor : UserControl
             stats.Body.Children.Add(Row(UiText.T("尺寸", "Dimensions"), Info($"{s.X:0.###} × {s.Y:0.###} × {s.Z:0.###} m")));
         }
 
-        Placeholder("顶点组", "Vertex Groups");
-        Placeholder("形态键", "Shape Keys");
-        Placeholder("UV 贴图", "UV Maps");
-        Placeholder("颜色属性", "Color Attributes");
-        Placeholder("法向", "Normals");
-        Placeholder("自定义属性", "Custom Properties");
     }
 
     // ---------------- Material ----------------
@@ -669,10 +635,6 @@ public sealed class PropertiesEditor : UserControl
         dataRow.Children.Add(nameBox);
         _content.Children.Add(dataRow);
 
-        // 预览 (P2: preview sphere)
-        var preview = AddPanel("预览", "Preview", false);
-        preview.Body.Children.Add(new TextBlock { Text = UiText.T("（预览球暂未实现）", "(Preview sphere not implemented yet)"), Foreground = DimText, Margin = new Thickness(8, 2, 0, 2) });
-
         // 表(曲)面 = 原理化 BSDF
         var surface = AddPanel("表(曲)面", "Surface", true);
         surface.Body.Children.Add(Row(UiText.T("表(曲)面", "Surface"), Info(UiText.T("原理化 BSDF", "Principled BSDF"))));
@@ -689,12 +651,6 @@ public sealed class PropertiesEditor : UserControl
         surface.Body.Children.Add(Scalar(UiText.T("糙度", "Roughness"), m.Roughness, (v, live) => vp.EditMaterial(m, x => x.Roughness = (float)v, live), () => m.Roughness));
         surface.Body.Children.Add(Scalar(UiText.T("折射率(IOR)", "IOR"), m.Ior, (v, live) => vp.EditMaterial(m, x => x.Ior = (float)v, live), () => m.Ior, min: 1, max: 4, fill: false));
         surface.Body.Children.Add(Scalar("Alpha", m.BaseColor.W, (v, live) => vp.EditMaterial(m, x => x.BaseColor = Set(x.BaseColor, 3, (float)v), live), () => m.BaseColor.W));
-        foreach (var (zh, en) in new[] { ("漫射", "Diffuse"), ("次表面", "Subsurface"), ("高光", "Specular"), ("透射", "Transmission"), ("涂层", "Coat"), ("边缘光泽", "Sheen") })
-        {
-            var sub = AddPanel(zh, en, false, surface);
-            sub.Body.Children.Add(new TextBlock { Text = UiText.T("（暂未实现）", "(Not implemented yet)"), Foreground = DimText, Margin = new Thickness(8, 2, 0, 2) });
-        }
-
         var emission = AddPanel("自发光", "Emission", false, surface);
         var emissionBar = new Border { Height = 20, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(ToColor(new Vector4(m.EmissiveColor, 1))), Cursor = Cursors.Hand, ToolTip = UiText.T("点击打开取色器", "Click to pick a color") };
         emissionBar.MouseLeftButtonUp += (_, e) =>
@@ -726,9 +682,6 @@ public sealed class PropertiesEditor : UserControl
         var cull = Check(UiText.T("背面剔除", "Backface Culling"), !m.DoubleSided, v => { if (m.DoubleSided != !v) vp.EditMaterial(m, x => x.DoubleSided = !v); });
         _updaters.Add(() => { if (cull.IsChecked != !m.DoubleSided) cull.IsChecked = !m.DoubleSided; });
         settings.Body.Children.Add(Row("", cull));
-        Placeholder("体积（音量）", "Volume");
-        Placeholder("视图显示", "Viewport Display");
-        Placeholder("自定义属性", "Custom Properties");
     }
 
     static float Get(Vector4 v, int c) => c == 0 ? v.X : c == 1 ? v.Y : c == 2 ? v.Z : v.W;
@@ -777,30 +730,6 @@ public sealed class PropertiesEditor : UserControl
         units.Body.Children.Add(Row(UiText.T("单位系统", "Unit System"), Info(UiText.T("公制", "Metric"))));
         units.Body.Children.Add(Row(UiText.T("长度", "Length"), Info(UiText.T("米", "Meters"))));
         units.Body.Children.Add(Row(UiText.T("旋转", "Rotation"), Info(UiText.T("角度", "Degrees"))));
-        Placeholder("重力", "Gravity");
-        Placeholder("模拟", "Simulation");
-        Placeholder("音频", "Audio");
-        Placeholder("刚体世界环境", "Rigid Body World");
-        Placeholder("动画", "Animation");
-        Placeholder("自定义属性", "Custom Properties");
-    }
-
-    void BuildPlaceholders(Tab tab)
-    {
-        string[][] names = tab switch
-        {
-            Tab.Tool => [["工作区", "Workspace"], ["选项", "Options"]],
-            Tab.Render => [["采样", "Sampling"], ["光照", "Lighting"], ["胶片", "Film"], ["色彩管理", "Color Management"]],
-            Tab.Output => [["格式", "Format"], ["帧范围", "Frame Range"], ["输出", "Output"]],
-            Tab.ViewLayer => [["视图层", "View Layer"], ["通道", "Passes"]],
-            Tab.World => [["表面", "Surface"], ["体积（音量）", "Volume"], ["视图显示", "Viewport Display"]],
-            Tab.Modifiers => [["添加修改器", "Add Modifier"]],
-            Tab.Particles => [["粒子系统", "Particle System"]],
-            Tab.Physics => [["启用物理", "Enable Physics"]],
-            Tab.Constraints => [["添加物体约束", "Add Object Constraint"]],
-            _ => [],
-        };
-        foreach (var n in names) Placeholder(n[0], n[1]);
     }
 }
 
