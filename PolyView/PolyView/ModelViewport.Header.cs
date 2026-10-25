@@ -5,7 +5,7 @@ using System.Windows.Media;
 
 namespace PolyView;
 
-/// <summary>Blender 4.2 3D viewport header: editor type, mode, View / Select / Add / Object menus (shading buttons sit on the right).</summary>
+/// <summary>PolyView viewport header with the active object mode, supported view / select / add / object menus, and shading controls.</summary>
 public sealed partial class ModelViewport
 {
     public const double HeaderHeight = 30;

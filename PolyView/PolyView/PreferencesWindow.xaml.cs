@@ -6,7 +6,7 @@ using System.Windows.Media;
 
 namespace PolyView;
 
-/// <summary>Blender 4.2-style Preferences window. Interface page holds the language selector.</summary>
+/// <summary>Preferences for the supported language, project folder, and MCP settings.</summary>
 public partial class PreferencesWindow : Window
 {
     string _category = "Interface";
@@ -73,16 +73,14 @@ public partial class PreferencesWindow : Window
         var sections = UiText.PrefSections(_category);
         for (int i = 0; i < sections.Length; i++)
         {
-            UIElement body = Placeholder();
-            bool expanded = false;
+            UIElement body;
+            bool expanded = true;
             if (_category == "Interface")
             {
-                if (i == 0) { body = DisplayPanel(); expanded = true; }
-                else if (i == 1) { body = EditorsPanel(); expanded = true; }
-                else if (i == 2) { body = LanguagePanel(); expanded = true; }
+                body = LanguagePanel();
             }
-            else if (_category == "AI") { body = i == 0 ? McpServerPanel() : McpClientsPanel(); expanded = true; }
-            else if (_category == "SaveLoad" && i == 1) { body = FolderRow(); expanded = true; }
+            else if (_category == "AI") body = i == 0 ? McpServerPanel() : McpClientsPanel();
+            else body = FolderRow();
             SectionList.Children.Add(Panel(sections[i], body, expanded));
         }
     }
@@ -98,65 +96,17 @@ public partial class PreferencesWindow : Window
 
     static StackPanel Rows(params UIElement[] rows)
     {
-        var s = new StackPanel();
-        foreach (var r in rows) { if (r is FrameworkElement fe) fe.Margin = new Thickness(0, 2, 0, 2); s.Children.Add(r); }
-        return s;
+        var panel = new StackPanel();
+        foreach (var row in rows)
+        {
+            if (row is FrameworkElement element) element.Margin = new Thickness(0, 2, 0, 2);
+            panel.Children.Add(row);
+        }
+
+        return panel;
     }
 
-    static UIElement Check(string label, bool value, string? leftLabel = null)
-    {
-        var cb = new CheckBox { Content = label, IsChecked = value, Foreground = Brushes.White, Style = (Style)Current!.FindResource("PrefCheck") };
-        return LabeledRow(leftLabel ?? "", cb);
-    }
-
-    static UIElement Combo(string label, params string[] items)
-    {
-        var c = new ComboBox { Height = 22, MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Stretch };
-        foreach (var it in items) c.Items.Add(it);
-        c.SelectedIndex = 0;
-        return LabeledRow(label, c);
-    }
-
-    static UIElement Field(string label, string value) => LabeledRow(label, new TextBox
-    {
-        Text = value, Height = 22, TextAlignment = TextAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
-        Background = FieldBrush, Foreground = Brushes.White, BorderThickness = new Thickness(0),
-    });
-
-    UIElement DisplayPanel() => Rows(
-        Field(UiText.T("分辨率缩放", "Resolution Scale"), "1.00"),
-        Field(UiText.T("线宽", "Line Width"), UiText.T("自动", "Auto")),
-        Check(UiText.T("工具提示", "Tooltips"), true, UiText.T("提示", "Tooltips")),
-        Check(UiText.T("Python 工具提示", "Python Tooltips"), false),
-        Check(UiText.T("启动画面", "Splash Screen"), true));
-
-    UIElement EditorsPanel() => Rows(
-        Check(UiText.T("区块重叠", "Region Overlap"), true, UiText.T("编辑器", "Editors")),
-        Check(UiText.T("边角控制柄", "Corner Splitting"), true),
-        Check(UiText.T("数值输入箭头", "Number Arrows"), true),
-        Check(UiText.T("导航控件", "Navigation Controls"), true),
-        Field(UiText.T("边界宽度", "Border Width"), "2 px"),
-        Combo(UiText.T("拾色器类型", "Color Picker Type"), UiText.T("圆形 (色相/值)", "Circle (HSV)"), UiText.T("方形 (SV + H)", "Square (SV + H)")),
-        Combo(UiText.T("标题栏位置", "Header Position"), UiText.T("保持现状", "Keep Existing"), UiText.T("顶部", "Top"), UiText.T("底部", "Bottom")),
-        Combo(UiText.T("系数显示类型", "Factor Display Type"), UiText.T("系数", "Factor"), UiText.T("百分比", "Percentage")),
-        Panel(UiText.T("临时编辑器", "Temporary Editors"), Rows(
-            Combo(UiText.T("渲染", "Render In"), UiText.T("新窗口", "New Window"), UiText.T("图像编辑器", "Image Editor")),
-            Combo(UiText.T("文件浏览器", "File Browser"), UiText.T("新窗口", "New Window"), UiText.T("最大化区域", "Maximized Area"))), false),
-        Panel(UiText.T("状态栏", "Status Bar"), Rows(
-            Check(UiText.T("场景统计", "Scene Statistics"), false, UiText.T("显示", "Show")),
-            Check(UiText.T("显存", "Video Memory"), false),
-            Check(UiText.T("版本", "PolyView Version"), false)), false));
-
-    UIElement LanguagePanel() => Rows(
-        LanguageRow(),
-        Check(UiText.T("工具提示", "Tooltips"), true, UiText.T("翻译", "Translate")),
-        Check(UiText.T("界面", "Interface"), true),
-        Check(UiText.T("报告", "Reports"), true),
-        Check(UiText.T("新建数据", "New Data"), true),
-        Combo(UiText.T("日期格式", "Date Format"), UiText.T("自动", "Automatic"), "YYYY-MM-DD", "DD/MM/YYYY"),
-        Combo(UiText.T("时间", "Time"), UiText.T("自动", "Automatic"), "24h", "12h"));
-
-    static TextBlock Placeholder() => new() { Text = UiText.PrefPlaceholder, Foreground = DimBrush };
+    UIElement LanguagePanel() => LanguageRow();
 
     static Grid LabeledRow(string label, UIElement value)
     {

@@ -89,6 +89,7 @@ public sealed partial class ModelViewport
         UpdateSceneBounds();
         PushUndo(AddEntryId(obj.Id), obj.Transform, obj.Transform);
         Select(obj.Id);
+        ShowImportedTextures(mesh);
         Invalidate();
         SceneChanged?.Invoke(this, EventArgs.Empty);
         ViewChanged?.Invoke(this, EventArgs.Empty);

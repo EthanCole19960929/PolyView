@@ -512,6 +512,7 @@ public sealed partial class ModelViewport : UserControl
         _renderer?.AddMesh(obj.Id, mesh);
         _renderer?.SetWorld(obj.Id, obj.World);
         LastUploadMilliseconds = _renderer == null ? 0 : watch.Elapsed.TotalMilliseconds;
+        ShowImportedTextures(mesh);
         UpdateSceneBounds();
         bool ortho = _camera.Orthographic;
         _camera.Frame(_sceneMin, _sceneMax);

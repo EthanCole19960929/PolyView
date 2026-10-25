@@ -50,9 +50,12 @@ public static unsafe class AssimpImporter
         var materials = new (Vector4 Color, int Texture, bool DoubleSided)[scene->MNumMaterials];
         var textureCache = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         string folder = Path.GetDirectoryName(Path.GetFullPath(path)) ?? "";
+        // FBX/OBJ commonly omit a sidedness property; Blender displays those materials on both sides.
+        // glTF specifies single-sided as its default, including when this importer is used as a fallback.
+        bool defaultDoubleSided = Path.GetExtension(path).ToLowerInvariant() is not (".gltf" or ".glb");
         for (int i = 0; i < materials.Length; i++)
         {
-            materials[i] = ReadMaterial(assimp, scene, scene->MMaterials[i], folder, textures, textureCache);
+            materials[i] = ReadMaterial(assimp, scene, scene->MMaterials[i], folder, textures, textureCache, defaultDoubleSided);
         }
 
         var cameras = new Dictionary<string, nint>();
@@ -280,7 +283,8 @@ public static unsafe class AssimpImporter
         Material* material,
         string folder,
         List<MeshTexture> textures,
-        Dictionary<string, int> cache)
+        Dictionary<string, int> cache,
+        bool defaultDoubleSided)
     {
         var color = Vector4.One;
         Vector4 value = default;
@@ -292,7 +296,8 @@ public static unsafe class AssimpImporter
 
         int twoSided = 0;
         uint max = 1;
-        assimp.GetMaterialIntegerArray(material, Assimp.MaterialTwosidedBase, 0, 0, ref twoSided, ref max);
+        var sidednessResult = assimp.GetMaterialIntegerArray(material, Assimp.MaterialTwosidedBase, 0, 0, ref twoSided, ref max);
+        bool doubleSided = sidednessResult == Return.Success ? twoSided != 0 : defaultDoubleSided;
 
         int texture = -1;
         AssimpString file = default;
@@ -307,7 +312,7 @@ public static unsafe class AssimpImporter
             }
         }
 
-        return (color, texture, twoSided != 0);
+        return (color, texture, doubleSided);
     }
 
     static int LoadTexture(Assimp assimp, AssimpScene* scene, string reference, string folder, List<MeshTexture> textures, Dictionary<string, int> cache)

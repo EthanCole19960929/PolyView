@@ -312,6 +312,7 @@ public sealed partial class SceneRenderer : IDisposable
     public ID3D11Texture2D? ColorTexture => _color;
     public string DeviceName { get; }
     public bool Wireframe { get; set; }
+    bool _solidShading = true;
 
     /// <summary>当前高亮的对象 id，-1 表示无。</summary>
     public int SelectedId { get; set; } = -1;
@@ -428,6 +429,7 @@ public sealed partial class SceneRenderer : IDisposable
     /// <summary>Scene lights for the shader (docs/07). useSceneLights = false keeps the default viewport light.</summary>
     public unsafe void SetLights(LightData[] lights, int count, Vector3 ambient, float shadingCode)
     {
+        _solidShading = MathF.Abs(shadingCode - 2f) < 0.5f;
         count = Math.Clamp(count, 0, MaxLights);
         var mapped = _context.Map(_lightConstants, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
         var header = (Vector4*)mapped.DataPointer;

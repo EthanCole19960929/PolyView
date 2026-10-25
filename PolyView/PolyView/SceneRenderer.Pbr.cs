@@ -282,7 +282,8 @@ public sealed partial class SceneRenderer
 
             var part = parts[p];
             WriteMaterial(mat);
-            bool doubleSided = part.DoubleSided || mat.DoubleSided;
+            // Solid/wireframe shows both sides, as Blender does; preview/rendered uses material sidedness.
+            bool doubleSided = _solidShading || part.DoubleSided || mat.DoubleSided;
             _context.RSSetState(doubleSided
                 ? (Wireframe ? _doubleSidedWireRasterizer : _doubleSidedRasterizer)
                 : (Wireframe ? _wireRasterizer : _rasterizer));

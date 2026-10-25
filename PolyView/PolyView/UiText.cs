@@ -116,7 +116,6 @@ public static partial class UiText
     public static string MenuUndo => Chinese ? "撤销" : "Undo";
     public static string MenuRedo => Chinese ? "重做" : "Redo";
     public static string MenuPreferences => Chinese ? "偏好设置..." : "Preferences...";
-    public static string MenuLanguage => Chinese ? "界面语言: English" : "Language: 中文";
     public static string MenuFullscreen => Chinese ? "切换窗口全屏" : "Toggle Window Fullscreen";
     public static string MenuProjection => Chinese ? "切换透视 / 正交" : "Toggle Perspective / Orthographic";
     public static string MenuAbout => Chinese ? "关于 PolyView" : "About PolyView";

@@ -44,8 +44,7 @@
                         <Separator/>
                         <MenuItem x:Name="MenuResetView" Click="ResetButton_Click"/>
                         <Separator/>
-                        <MenuItem x:Name="MenuLanguage" Click="LanguageButton_Click"/>
-                        <MenuItem x:Name="MenuPreferences" IsEnabled="False"/>
+                        <MenuItem x:Name="MenuPreferences"/>
                     </MenuItem>
                     <MenuItem x:Name="MenuWindow">
                         <MenuItem x:Name="MenuFullscreen" InputGestureText="Ctrl+Alt+Space" Click="MenuFullscreen_Click"/>

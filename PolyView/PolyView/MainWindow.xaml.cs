@@ -14,9 +14,6 @@ public partial class MainWindow : Window
         AppSettings.ApplyStoredLanguage();
         InitializeComponent();
         DarkTitleBar.Apply(this);
-        // Language now lives in Edit > Preferences; the old toggle is hidden.
-        MenuLanguage.Visibility = Visibility.Collapsed;
-        MenuPreferences.IsEnabled = true;
         MenuPreferences.Click += (_, _) => new PreferencesWindow(ApplyLanguage) { Owner = this }.ShowDialog();
         Viewport.ViewChanged += (_, _) => UpdateStatus();
         Outliner.Attach(Viewport);
@@ -63,7 +60,6 @@ public partial class MainWindow : Window
         MenuUndo.Header = UiText.MenuUndo;
         MenuRedo.Header = UiText.MenuRedo;
         MenuResetView.Header = UiText.Reset;
-        MenuLanguage.Header = UiText.MenuLanguage;
         MenuPreferences.Header = UiText.MenuPreferences;
         Viewport.ApplyHeaderLanguage();
         MenuWindow.Header = UiText.MenuWindow;
@@ -80,7 +76,7 @@ public partial class MainWindow : Window
         UpdateProjection();
     }
 
-    /// <summary>Blender workspace tabs: only Layout exists; the rest are shown greyed out.</summary>
+    /// <summary>Show the only workspace currently implemented by PolyView.</summary>
     void BuildWorkspaceTabs()
     {
         WorkspaceTabs.Children.Clear();
@@ -234,12 +230,6 @@ public partial class MainWindow : Window
     void ResetButton_Click(object sender, RoutedEventArgs e)
     {
         Viewport.ResetView();
-    }
-
-    void LanguageButton_Click(object sender, RoutedEventArgs e)
-    {
-        UiText.Chinese = !UiText.Chinese;
-        ApplyLanguage();
     }
 
     void ShowNotice(string text)

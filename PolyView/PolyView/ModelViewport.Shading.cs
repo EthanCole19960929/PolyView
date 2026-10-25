@@ -48,6 +48,16 @@ public sealed partial class ModelViewport
     void ToggleWireframeShading() =>
         Shading = _shading == ViewportShading.Wireframe ? _lastNonWire : ViewportShading.Wireframe;
 
+    /// <summary>Show imported colour maps immediately when loading a textured model into the default solid view.</summary>
+    void ShowImportedTextures(MeshData mesh)
+    {
+        if (_shading == ViewportShading.Solid
+            && mesh.Parts.Any(p => p.TextureIndex >= 0 && p.TextureIndex < mesh.Textures.Length))
+        {
+            Shading = ViewportShading.MaterialPreview;
+        }
+    }
+
     /// <summary>Value passed to the shader in Ambient.w: 1 scene lights, 2 solid (no textures), 3 material preview.</summary>
     float ShadingCode => _shading switch
     {
