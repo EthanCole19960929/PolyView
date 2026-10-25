@@ -40,6 +40,7 @@ public sealed class ProjectObject
     /// <summary>"model" (from an asset), "light" (added light), "builtin" (built-in sample mesh).</summary>
     public string Kind { get; set; } = "model";
     public string? AssetId { get; set; }
+    public string? AnimationSourcePath { get; set; }
     public string? Builtin { get; set; }
     public ProjectLight? Light { get; set; }
     public float[] Position { get; set; } = [0, 0, 0];
@@ -47,6 +48,7 @@ public sealed class ProjectObject
     public float[] Scale { get; set; } = [1, 1, 1];
     public bool Visible { get; set; } = true;               // own eye state
     public List<int> HiddenNodes { get; set; } = [];
+    public List<int> HiddenBones { get; set; } = [];
     public List<int> RenderOffNodes { get; set; } = [];     // -1 = the object row itself
     public List<int> ExpandedNodes { get; set; } = [];      // -1 = the object row itself
     /// <summary>Material id per slot (null = empty slot). Null in old projects.</summary>

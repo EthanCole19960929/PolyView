@@ -10,7 +10,7 @@ namespace PolyView;
 /// 用 Assimp（Silk.NET.Assimp，原生 assimp 6.x）读取 FBX、DAE、OBJ(+MTL)、3DS、PLY 等格式。
 /// 自己遍历 aiNode 树把节点变换烘焙进顶点（保留节点层级给大纲视图），缺法线时生成面法线，蒙皮模型按绑定姿态显示。
 /// </summary>
-public static unsafe class AssimpImporter
+public static unsafe partial class AssimpImporter
 {
     static readonly Lazy<Assimp> Api = new(Assimp.GetApi);
 
@@ -90,6 +90,20 @@ public static unsafe class AssimpImporter
         }
 
         var nodes = new List<SceneNode>();
+        var boneNames = new HashSet<string>(StringComparer.Ordinal);
+        for (uint i = 0; i < scene->MNumMeshes; i++)
+        {
+            var source = scene->MMeshes[i];
+            for (uint b = 0; b < source->MNumBones; b++)
+            {
+                boneNames.Add(source->MBones[b]->MName.AsString);
+            }
+        }
+        var boneNamePrefixes = boneNames
+            .Select(name => name.IndexOf(':') is var separator && separator >= 0 ? name[..(separator + 1)] : "")
+            .Where(prefix => prefix.Length > 0)
+            .ToHashSet(StringComparer.Ordinal);
+
         var stack = new Stack<(nint Node, int Parent, Matrix4x4 ParentWorld)>();
         stack.Push(((nint)scene->MRootNode, -1, Matrix4x4.Identity));
         while (stack.Count > 0)
@@ -119,6 +133,7 @@ public static unsafe class AssimpImporter
                 Name = string.IsNullOrEmpty(name) ? $"Node {slot}" : name,
                 Parent = parent,
                 Kind = parts.Count > firstPart ? SceneNodeKind.Mesh : camera != null ? SceneNodeKind.Camera : light != null ? SceneNodeKind.Light : SceneNodeKind.Empty,
+                IsBone = boneNames.Contains(name) || boneNamePrefixes.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)),
                 Local = local,
                 World = world,
                 PartIndices = Enumerable.Range(firstPart, parts.Count - firstPart).ToArray(),

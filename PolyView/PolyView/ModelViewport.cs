@@ -232,6 +232,7 @@ public sealed partial class ModelViewport : UserControl
 
     public void ClearScene()
     {
+        StopAnimation();
         _objects.Clear();
         _renderer?.ClearMeshes();
         Select(-1);
@@ -491,6 +492,7 @@ public sealed partial class ModelViewport : UserControl
     {
         if (!append)
         {
+            StopAnimation();
             _objects.Clear();
             _renderer?.ClearMeshes();
             Select(-1);
@@ -503,6 +505,7 @@ public sealed partial class ModelViewport : UserControl
             Id = _nextId++,
             Name = path == null ? mesh.Name : System.IO.Path.GetFileName(path),
             SourcePath = path,
+            AnimationSourcePath = path,
             Mesh = mesh,
             ImportOffset = center,
         };
@@ -542,6 +545,7 @@ public sealed partial class ModelViewport : UserControl
             CreateD3D9();
             _renderer.Wireframe = _wireframe;
             _renderer.SelectedId = _selectedId;
+            ApplyOverlayVisibility();
             if (_objects.Count == 0)
             {
                 if (_bench == null)
@@ -581,6 +585,7 @@ public sealed partial class ModelViewport : UserControl
 
     void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        StopAnimation();
         if (_renderingHooked)
         {
             CompositionTarget.Rendering -= OnRendering;
@@ -615,6 +620,7 @@ public sealed partial class ModelViewport : UserControl
 
     void RenderTick()
     {
+        AdvanceAnimation();
         if (_bench != null && _bench.Running)
         {
             _camera.Yaw += 0.01f;

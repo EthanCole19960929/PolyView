@@ -18,11 +18,13 @@ public sealed partial class ModelViewport
             {
                 Id = o.Id,
                 Name = o.Name,
+                AnimationSourcePath = o.AnimationSourcePath ?? o.SourcePath,
                 Position = [o.Transform.Position.X, o.Transform.Position.Y, o.Transform.Position.Z],
                 Rotation = [o.Transform.Rotation.X, o.Transform.Rotation.Y, o.Transform.Rotation.Z, o.Transform.Rotation.W],
                 Scale = [o.Transform.Scale.X, o.Transform.Scale.Y, o.Transform.Scale.Z],
                 Visible = o.Visible,
                 HiddenNodes = [.. o.HiddenNodes.Order()],
+                HiddenBones = [.. o.HiddenBones.Order()],
                 MaterialSlots = o.MaterialSlots.Count > 0 ? CaptureSlots(o) : null,
             };
             if (o.SourcePath != null && File.Exists(o.SourcePath))
@@ -111,7 +113,7 @@ public sealed partial class ModelViewport
 
     /// <summary>Replaces the scene with the project (UI thread). Returns old project id -> new object id, and names of objects that could not be restored.</summary>
     public (Dictionary<int, int> IdMap, List<string> Failed) RestoreProject(
-        ProjectDocument doc, IReadOnlyDictionary<string, string> assetPaths, IReadOnlyDictionary<string, ImportResult> imports)
+        ProjectDocument doc, IReadOnlyDictionary<string, string> assetPaths, IReadOnlyDictionary<string, ImportResult> imports, string? projectPath = null)
     {
         CancelTransform();
         _loadVersion++;
@@ -132,6 +134,8 @@ public sealed partial class ModelViewport
                     {
                         ApplyMesh(r.Mesh, assetPaths[po.AssetId], append: true);
                         obj = _objects[^1];
+                        obj.AnimationSourcePath = AnimationCatalog.ResolveModelPath(po.AnimationSourcePath,
+                            doc.Assets.FirstOrDefault(a => a.Id == po.AssetId)?.OriginalPath, obj.SourcePath!, projectPath);
                     }
 
                     break;
@@ -173,6 +177,14 @@ public sealed partial class ModelViewport
                 if (n >= 0 && n < obj.Mesh.Nodes.Length)
                 {
                     SetNodeVisible(obj.Id, n, false);
+                }
+            }
+
+            foreach (int n in po.HiddenBones)
+            {
+                if (n >= 0 && n < obj.Mesh.Nodes.Length && obj.Mesh.Nodes[n].IsBone)
+                {
+                    SetBoneOverlayNodeVisible(obj.Id, n, false);
                 }
             }
 

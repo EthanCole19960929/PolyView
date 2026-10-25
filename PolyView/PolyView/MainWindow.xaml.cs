@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         InitExport();
         InitMcp();
         InitProperties();
+        InitAnimations();
 
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
         // 性能测试：PolyView.exe --bench 模型路径 结果文件（追加一行制表符分隔的结果后自动退出）
@@ -67,11 +68,14 @@ public partial class MainWindow : Window
         MenuProjection.Header = UiText.MenuProjection;
         MenuHelp.Header = UiText.MenuHelp;
         MenuAbout.Header = UiText.MenuAbout;
+        SceneTab.Header = UiText.OutlinerTitle;
+        AnimationTab.Header = UiText.AnimationTitle;
         BuildWorkspaceTabs();
         HintText.Text = ""; // status bar hint removed (Blender keeps the left side empty)
         Outliner.ApplyLanguage();
         Viewport.ApplyToolbarLanguage();
         Viewport.ApplyShadingLanguage();
+        Animations.ApplyLanguage();
         UpdateStatus();
         UpdateProjection();
     }

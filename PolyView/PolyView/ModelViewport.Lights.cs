@@ -14,10 +14,30 @@ public sealed partial class ModelViewport
     readonly SceneRenderer.LightData[] _lightData = new SceneRenderer.LightData[SceneRenderer.MaxLights];
     Vertex[] _iconVertices = new Vertex[4096];
     int _iconCount;
+    Vertex[] _boneVertices = new Vertex[4096];
+    int _boneCount;
+    bool _boneOverlayVisible;
     static readonly Vector3 DefaultAmbient = new SceneWorld().Color;
 
     static readonly uint IconColor = Vertex.PackColor(new Vector4(0.02f, 0.02f, 0.02f, 1f));
     static readonly uint IconSelectedColor = Vertex.PackColor(new Vector4(1f, 0.667f, 0.251f, 1f));
+    static readonly uint BoneOverlayColor = Vertex.PackColor(new Vector4(0.58f, 0.58f, 0.58f, 1f));
+
+    public bool BoneOverlayVisible
+    {
+        get => _boneOverlayVisible;
+        set
+        {
+            if (_boneOverlayVisible == value)
+            {
+                return;
+            }
+
+            _boneOverlayVisible = value;
+            UpdateOverlayButtonState();
+            Invalidate();
+        }
+    }
 
     /// <summary>Display name of a light subtype (UiText LightPoint / Sun / Spot / Area).</summary>
     public static string LightTypeName(SceneLightType type) => type switch
@@ -93,6 +113,140 @@ public sealed partial class ModelViewport
         _renderer.SetLights(_lightData, count, ambient, ShadingCode);
         AddHelperOverlays();
         _renderer.SetLightIcons(_iconVertices, _iconCount);
+        UpdateBoneGeometry();
+    }
+
+    void UpdateBoneGeometry()
+    {
+        _boneCount = 0;
+        if (_renderer == null || !OverlayEnabled || !_boneOverlayVisible)
+        {
+            _renderer?.SetBoneGeometry(_boneVertices, 0);
+            return;
+        }
+
+        foreach (var o in _objects)
+        {
+            if (!o.Visible)
+            {
+                continue;
+            }
+
+            var nodes = o.Mesh.Nodes;
+            var animation = _playback?.Id == o.Id ? _playback.Animation : null;
+            var objectWorld = o.World * Matrix4x4.CreateScale(_scale);
+            for (int i = 0; i < nodes.Length; i++)
+            {
+                var node = nodes[i];
+                if (!node.IsBone || o.HiddenBones.Contains(i))
+                {
+                    continue;
+                }
+
+                int parent = node.Parent;
+                while (parent >= 0 && !nodes[parent].IsBone)
+                {
+                    parent = nodes[parent].Parent;
+                }
+
+                if (parent < 0 || !NodeAndAncestorsVisible(o, i) || !NodeAndAncestorsVisible(o, parent))
+                {
+                    continue;
+                }
+
+                var a = BonePosition(o, nodes[parent], animation, objectWorld);
+                var b = BonePosition(o, node, animation, objectWorld);
+                AddBoneShape(a, b);
+            }
+        }
+
+        _renderer.SetBoneGeometry(_boneVertices, _boneCount);
+    }
+
+    static bool NodeAndAncestorsVisible(SceneObject o, int node)
+    {
+        for (int i = node; i >= 0; i = o.Mesh.Nodes[i].Parent)
+        {
+            if (o.HiddenNodes.Contains(i))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static Vector3 BonePosition(SceneObject o, SceneNode node, SkeletalAnimation? animation, in Matrix4x4 objectWorld)
+    {
+        Vector3 local;
+        if (animation != null && animation.TryGetNodeWorld(node.Name, out var animatedWorld))
+        {
+            local = animation.ToMeshLocal(animatedWorld.Translation);
+        }
+        else
+        {
+            local = node.World.Translation - o.ImportOffset;
+        }
+
+        return Vector3.Transform(local, objectWorld);
+    }
+
+    void AddBoneShape(Vector3 a, Vector3 b)
+    {
+        var axis = b - a;
+        float length = axis.Length();
+        if (!float.IsFinite(length) || length < 1e-5f)
+        {
+            return;
+        }
+
+        axis /= length;
+        var side = MathF.Abs(axis.Y) < 0.9f
+            ? Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitY))
+            : Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitX));
+        var up = Vector3.Normalize(Vector3.Cross(axis, side));
+        const int sides = 6;
+        float radius = length * 0.12f;
+        float shoulderRadius = radius * 0.72f;
+        var shoulder = a + axis * (length * 0.2f);
+        Span<Vector3> rootRing = stackalloc Vector3[sides];
+        Span<Vector3> shoulderRing = stackalloc Vector3[sides];
+        for (int i = 0; i < sides; i++)
+        {
+            float angle = i * MathF.Tau / sides;
+            var radial = side * MathF.Cos(angle) + up * MathF.Sin(angle);
+            rootRing[i] = a + radial * radius;
+            shoulderRing[i] = shoulder + radial * shoulderRadius;
+        }
+
+        // Blender-like octahedral bone: a broad, short head and a long tapered shaft ending at the child joint.
+        for (int i = 0; i < sides; i++)
+        {
+            int next = (i + 1) % sides;
+            AddBoneTriangle(a, rootRing[next], rootRing[i], i);
+            AddBoneTriangle(rootRing[i], rootRing[next], shoulderRing[next], i);
+            AddBoneTriangle(rootRing[i], shoulderRing[next], shoulderRing[i], i);
+            AddBoneTriangle(shoulderRing[i], shoulderRing[next], b, i);
+        }
+    }
+
+    void AddBoneTriangle(Vector3 a, Vector3 b, Vector3 c, int facet)
+    {
+        if (_boneCount + 3 > _boneVertices.Length)
+        {
+            if (_boneVertices.Length >= 1 << 16)
+            {
+                return;
+            }
+
+            Array.Resize(ref _boneVertices, Math.Min(_boneVertices.Length * 2, 1 << 16));
+        }
+
+        // Alternating facet values keep the six-sided volume readable in the unlit viewport overlay.
+        uint color = facet % 2 == 0 ? BoneOverlayColor : Vertex.PackColor(new Vector4(0.68f, 0.68f, 0.68f, 1f));
+        _boneVertices[_boneCount++] = new Vertex(a, Vector3.UnitY) { Color = color };
+        _boneVertices[_boneCount++] = new Vertex(b, Vector3.UnitY) { Color = color };
+        _boneVertices[_boneCount++] = new Vertex(c, Vector3.UnitY) { Color = color };
     }
 
     static SceneRenderer.LightData ToLightData(SceneLight light, Vector3 position, Vector3 direction)

@@ -260,6 +260,8 @@ public sealed partial class SceneRenderer : IDisposable
     const int IconCapacity = 1 << 16;
     Vertex[]? _icons;
     int _iconCount;
+    Vertex[]? _boneGeometry;
+    int _boneVertexCount;
     readonly ID3D11Buffer[] _lightSlot = new ID3D11Buffer[1];
     public const int MaxLights = 16;
     readonly ID3D11DepthStencilState _depthState;
@@ -451,6 +453,13 @@ public sealed partial class SceneRenderer : IDisposable
         _iconCount = Math.Clamp(count, 0, Math.Min(vertices.Length, IconCapacity));
     }
 
+    /// <summary>Tapered skeleton overlay geometry, drawn in front of scene geometry.</summary>
+    public void SetBoneGeometry(Vertex[] vertices, int count)
+    {
+        _boneGeometry = vertices;
+        _boneVertexCount = Math.Clamp(count, 0, Math.Min(vertices.Length, IconCapacity));
+    }
+
     unsafe void DrawLightIcons(in Matrix4x4 viewProjection, Vector3 light)
     {
         if (_icons == null || _iconCount < 2)
@@ -475,6 +484,32 @@ public sealed partial class SceneRenderer : IDisposable
         _context.PSSetShaderResources(0, 1, _textureSlot);
         _context.Draw((uint)(_iconCount & ~1), 0);
         _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        _context.OMSetDepthStencilState(_depthState, 0);
+    }
+
+    unsafe void DrawBoneGeometry(in Matrix4x4 viewProjection, Vector3 light)
+    {
+        if (_boneGeometry == null || _boneVertexCount < 3)
+        {
+            return;
+        }
+
+        var mapped = _context.Map(_iconVertexBuffer, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
+        fixed (Vertex* source = _boneGeometry)
+        {
+            Buffer.MemoryCopy(source, (void*)mapped.DataPointer, (long)IconCapacity * sizeof(Vertex), (long)_boneVertexCount * sizeof(Vertex));
+        }
+
+        _context.Unmap(_iconVertexBuffer, 0);
+        _context.OMSetDepthStencilState(_noDepthState, 0);
+        WriteConstants(Matrix4x4.Identity, viewProjection, light, unlit: true, highlight: 0f);
+        _context.RSSetState(_doubleSidedRasterizer);
+        _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        _vertexSlot[0] = _iconVertexBuffer;
+        _context.IASetVertexBuffers(0, 1, _vertexSlot, _stride, _offset);
+        _textureSlot[0] = _whiteView;
+        _context.PSSetShaderResources(0, 1, _textureSlot);
+        _context.Draw((uint)(_boneVertexCount / 3 * 3), 0);
         _context.OMSetDepthStencilState(_depthState, 0);
     }
 
@@ -504,6 +539,25 @@ public sealed partial class SceneRenderer : IDisposable
         }
 
         _objects.Add(gpu);
+    }
+
+    /// <summary>Update animated positions/normals without recreating indices, materials, or textures.</summary>
+    public unsafe void UpdateVertices(int id, Vertex[] vertices)
+    {
+        foreach (var gpu in _objects)
+        {
+            if (gpu.Id != id) continue;
+            uint bytes = checked((uint)(vertices.Length * Marshal.SizeOf<Vertex>()));
+            if (!gpu.DynamicVertices)
+            {
+                var buffer = _device.CreateBuffer(bytes, BindFlags.VertexBuffer, ResourceUsage.Dynamic, CpuAccessFlags.Write);
+                gpu.Vertices.Dispose(); gpu.Vertices = buffer; gpu.DynamicVertices = true;
+            }
+            var mapped = _context.Map(gpu.Vertices, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
+            fixed (Vertex* source = vertices) Buffer.MemoryCopy(source, (void*)mapped.DataPointer, bytes, bytes);
+            _context.Unmap(gpu.Vertices, 0);
+            return;
+        }
     }
 
     /// <summary>设置对象的世界矩阵（变换只改矩阵，不重建顶点缓冲）。</summary>
@@ -557,6 +611,11 @@ public sealed partial class SceneRenderer : IDisposable
 
     void DrawOutline()
     {
+        if (!ShowSelectionOutline)
+        {
+            return;
+        }
+
         bool any = false;
         for (int i = 0; i < _objects.Count; i++)
         {
@@ -813,6 +872,7 @@ public sealed partial class SceneRenderer : IDisposable
     }
 
     public bool ShowGrid { get; set; } = true;
+    public bool ShowSelectionOutline { get; set; } = true;
 
     /// <summary>渲染和拾取共用同一套 view / projection（含正交），保证点到哪选到哪。</summary>
     public static void GetViewProjection(in OrbitCamera camera, in Vector3 scale, float meshRadius, float aspect, out Matrix4x4 view, out Matrix4x4 projection)
@@ -896,6 +956,7 @@ public sealed partial class SceneRenderer : IDisposable
         }
 
         DrawLightIcons(viewProjection, light);
+        DrawBoneGeometry(viewProjection, light);
         DrawOutline();
         DrawGizmo(viewProjection, view, light);
         _context.Flush();
@@ -1105,6 +1166,7 @@ public sealed partial class SceneRenderer : IDisposable
     {
         public int Id;
         public required ID3D11Buffer Vertices;
+        public bool DynamicVertices;
         public required ID3D11Buffer Indices;
         public int IndexCount;
         public bool Visible = true;

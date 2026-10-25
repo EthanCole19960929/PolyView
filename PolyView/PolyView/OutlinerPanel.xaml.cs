@@ -82,6 +82,10 @@ public partial class OutlinerPanel : UserControl
                     else
                     {
                         item.SetVisibleSilently(viewport.IsNodeVisible(id, item.NodeIndex));
+                        if (item.IsBoneNode)
+                        {
+                            item.SetBoneVisibleSilently(viewport.IsBoneOverlayNodeVisible(id, item.NodeIndex));
+                        }
                     }
                 }
             }
@@ -207,8 +211,15 @@ public partial class OutlinerPanel : UserControl
         {
             var node = nodes[i];
             int nodeIndex = node.Index;
-            var item = new OutlinerItem(this, KindOf(node.Kind), NodeName(node), id, nodeIndex, v => viewport.SetNodeVisible(id, nodeIndex, v));
+            var item = new OutlinerItem(this, KindOf(node.Kind), NodeName(node), id, nodeIndex,
+                v => viewport.SetNodeVisible(id, nodeIndex, v),
+                isBoneNode: node.IsBone,
+                onBoneVisibleChanged: node.IsBone ? v => viewport.SetBoneOverlayNodeVisible(id, nodeIndex, v) : null);
             item.SetVisibleSilently(_viewport.IsNodeVisible(id, nodeIndex));
+            if (node.IsBone)
+            {
+                item.SetBoneVisibleSilently(_viewport.IsBoneOverlayNodeVisible(id, nodeIndex));
+            }
             item.SetRenderableSilently(!_renderOff.Contains((id, nodeIndex)));
             created[i] = item;
             var parent = node.Parent >= 0 && node.Parent < i ? created[node.Parent] : file;
@@ -421,6 +432,7 @@ public partial class OutlinerPanel : UserControl
 
         item.Depth = depth;
         _rows.Add(item);
+
         // 搜索时自动展开有匹配的分支
         if (item.Expanded || _filter.Length > 0)
         {

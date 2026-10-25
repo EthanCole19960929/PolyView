@@ -8,6 +8,8 @@ public sealed class SceneObject
     public required int Id { get; init; }
     public required string Name { get; set; }
     public string? SourcePath { get; init; }
+    /// <summary>Original model location for animation discovery, independent of extracted project assets.</summary>
+    public string? AnimationSourcePath { get; set; }
     public required MeshData Mesh { get; set; }
 
     /// <summary>Center subtracted from the vertices at import (node / light matrices are still in file space).</summary>
@@ -18,6 +20,9 @@ public sealed class SceneObject
 
     /// <summary>被隐藏的节点下标（MeshData.Nodes）。</summary>
     public HashSet<int> HiddenNodes { get; } = [];
+
+    /// <summary>被隐藏的骨骼叠加节点下标（不影响节点本身或模型几何的可见性）。</summary>
+    public HashSet<int> HiddenBones { get; } = [];
 
     /// <summary>Material slots (Blender Link = Object). Filled lazily: one slot per part group, empty = default grey.</summary>
     public List<MaterialSlot> MaterialSlots { get; } = [];

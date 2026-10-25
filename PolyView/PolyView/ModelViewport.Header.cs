@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -14,7 +15,6 @@ public sealed partial class ModelViewport
     readonly MenuItem _hdrAdd = new();
     readonly MenuItem _hdrObject = new();
     readonly TextBlock _hdrModeText = new() { Foreground = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)) };
-
     UIElement BuildViewportHeader()
     {
         var menu = new Menu { Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
@@ -52,7 +52,6 @@ public sealed partial class ModelViewport
         var headerContent = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         headerContent.Children.Add(modeLabel);
         headerContent.Children.Add(menu);
-
         ApplyHeaderLanguage();
         return new Border
         {

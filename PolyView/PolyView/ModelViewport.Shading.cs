@@ -17,6 +17,8 @@ public enum ViewportShading
 public sealed partial class ModelViewport
 {
     readonly ToggleButton[] _shadingButtons = new ToggleButton[4];
+    ToggleButton? _overlayButton;
+    ToggleButton? _overlayDropdownButton;
     ViewportShading _shading = ViewportShading.Solid;
     ViewportShading _lastNonWire = ViewportShading.Solid;
 
@@ -75,6 +77,57 @@ public sealed partial class ModelViewport
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 4, 10, 0),
         };
+        var overlaysButton = new ToggleButton
+        {
+            Width = 22,
+            Height = 22,
+            Template = ToolTemplate("4,0,0,4"),
+            Foreground = IconWhite,
+            BorderThickness = new Thickness(0),
+            Focusable = false,
+            IsChecked = OverlayEnabled,
+            ToolTip = UiText.ViewportOverlay,
+            Content = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M1,7 A6,6 0 1 1 13,7 A6,6 0 1 1 1,7 Z M4,7 A3,3 0 1 0 10,7 A3,3 0 1 0 4,7 Z"),
+                Stroke = IconWhite,
+                StrokeThickness = 1.1,
+                Width = 14,
+                Height = 14,
+                Stretch = Stretch.Uniform,
+            },
+        };
+        _overlayButton = overlaysButton;
+        overlaysButton.Click += (_, _) => OverlayEnabled = overlaysButton.IsChecked == true;
+        bar.Children.Add(overlaysButton);
+        var overlayDropdownButton = new ToggleButton
+        {
+            Width = 15,
+            Height = 22,
+            Margin = new Thickness(0, 0, 5, 0),
+            Template = ToolTemplate("0,4,4,0"),
+            Foreground = IconWhite,
+            BorderThickness = new Thickness(0),
+            Focusable = false,
+            IsChecked = OverlayEnabled,
+            ToolTip = UiText.ViewportOverlay,
+            Content = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M0,0 L3.5,3.5 L7,0"),
+                Stroke = IconWhite,
+                StrokeThickness = 1.2,
+                Width = 7,
+                Height = 4,
+                Stretch = Stretch.Fill,
+            },
+        };
+        _overlayDropdownButton = overlayDropdownButton;
+        overlayDropdownButton.Click += (_, _) =>
+        {
+            UpdateOverlayButtonState();
+            ShowOverlayMenu(overlayDropdownButton);
+        };
+        bar.Children.Add(overlayDropdownButton);
         for (int i = 0; i < 4; i++)
         {
             var mode = (ViewportShading)i;

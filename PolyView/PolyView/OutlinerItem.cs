@@ -43,7 +43,9 @@ public sealed class OutlinerItem : INotifyPropertyChanged
 
     readonly OutlinerPanel _owner;
     readonly Action<bool>? _onVisibleChanged;
+    readonly Action<bool>? _onBoneVisibleChanged;
     bool _visible = true;
+    bool _boneVisible = true;
     bool _renderable = true;
     bool _included = true;
     bool _expanded;
@@ -52,7 +54,8 @@ public sealed class OutlinerItem : INotifyPropertyChanged
     bool _inheritedRenderOff;
     int _depth;
 
-    public OutlinerItem(OutlinerPanel owner, OutlinerKind kind, string name, int objectId, int nodeIndex, Action<bool>? onVisibleChanged = null)
+    public OutlinerItem(OutlinerPanel owner, OutlinerKind kind, string name, int objectId, int nodeIndex,
+        Action<bool>? onVisibleChanged = null, bool isBoneNode = false, Action<bool>? onBoneVisibleChanged = null)
     {
         _owner = owner;
         Kind = kind == OutlinerKind.File ? OutlinerKind.Mesh : kind;
@@ -60,6 +63,8 @@ public sealed class OutlinerItem : INotifyPropertyChanged
         ObjectId = objectId;
         NodeIndex = nodeIndex;
         _onVisibleChanged = onVisibleChanged;
+        IsBoneNode = isBoneNode;
+        _onBoneVisibleChanged = onBoneVisibleChanged;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -101,6 +106,8 @@ public sealed class OutlinerItem : INotifyPropertyChanged
 
     /// <summary>MeshData.Nodes index; -1 for object rows and special rows.</summary>
     public int NodeIndex { get; }
+
+    public bool IsBoneNode { get; }
 
     public OutlinerItem? Parent { get; private set; }
     public List<OutlinerItem> Children { get; } = [];
@@ -236,6 +243,8 @@ public sealed class OutlinerItem : INotifyPropertyChanged
 
     public Visibility ToggleVisibility => (ObjectId >= 0 && !IsDataRow) || IsCollection ? Visibility.Visible : Visibility.Collapsed;
 
+    public Visibility BoneToggleVisibility => IsBoneNode ? Visibility.Visible : Visibility.Collapsed;
+
     /// <summary>Collection "exclude from view layer" checkbox.</summary>
     public bool Included
     {
@@ -275,6 +284,24 @@ public sealed class OutlinerItem : INotifyPropertyChanged
             {
                 _onVisibleChanged?.Invoke(value);
             }
+        }
+    }
+
+    public bool BoneVisible
+    {
+        get => _boneVisible;
+        set
+        {
+            if (_boneVisible == value)
+            {
+                return;
+            }
+
+            _boneVisible = value;
+            Raise(nameof(BoneVisible));
+            Raise(nameof(BoneEyeData));
+            Raise(nameof(BoneToggleOpacity));
+            _onBoneVisibleChanged?.Invoke(value);
         }
     }
 
@@ -322,13 +349,19 @@ public sealed class OutlinerItem : INotifyPropertyChanged
 
     public Geometry EyeData => _visible ? EyeOpen : EyeClosed;
 
+    public Geometry BoneEyeData => _boneVisible ? EyeOpen : EyeClosed;
+
     public double RowOpacity => (IsCollection ? _included && !_inheritedExcluded : _visible && !_inheritedOff) ? 1.0 : 0.4;
 
     public double ToggleOpacity => _inheritedExcluded ? 0.25 : _inheritedOff ? 0.5 : _visible ? 1.0 : 0.55;
 
+    public double BoneToggleOpacity => _inheritedExcluded || _inheritedOff ? 0.35 : _boneVisible ? 1.0 : 0.55;
+
     public double RenderOpacity => _inheritedRenderOff ? 0.25 : _renderable ? 1.0 : 0.4;
 
     public string EyeTip => IsCollection ? UiText.TipCollectionHide : UiText.ToggleVisibility;
+
+    public string BoneEyeTip => UiText.ToggleBoneOverlay;
 
     public string RenderTip => UiText.TipDisableRender;
 
@@ -343,6 +376,19 @@ public sealed class OutlinerItem : INotifyPropertyChanged
 
         _visible = visible;
         RaiseVisible();
+    }
+
+    public void SetBoneVisibleSilently(bool visible)
+    {
+        if (_boneVisible == visible)
+        {
+            return;
+        }
+
+        _boneVisible = visible;
+        Raise(nameof(BoneVisible));
+        Raise(nameof(BoneEyeData));
+        Raise(nameof(BoneToggleOpacity));
     }
 
     void RaiseVisible()

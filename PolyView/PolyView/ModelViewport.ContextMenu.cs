@@ -21,7 +21,7 @@ public sealed partial class ModelViewport
 
     bool _ctxArmed;
     Point _ctxPress;
-    readonly List<(MeshData Mesh, ObjectTransform Transform, string Name, string? Source, PrimitiveSpec? Spec)> _objectClipboard = [];
+    readonly List<(MeshData Mesh, ObjectTransform Transform, string Name, string? Source, PrimitiveSpec? Spec, string? AnimationSource)> _objectClipboard = [];
 
     // ---------------- right click ----------------
 
@@ -252,7 +252,7 @@ public sealed partial class ModelViewport
         _objectClipboard.Clear();
         foreach (var o in SelectedObjects())
         {
-            _objectClipboard.Add((o.Mesh, o.Transform, o.Name, o.SourcePath, GetPrimitiveSpec(o.Id)));
+            _objectClipboard.Add((o.Mesh, o.Transform, o.Name, o.SourcePath, GetPrimitiveSpec(o.Id), o.AnimationSourcePath));
         }
     }
 
@@ -261,7 +261,7 @@ public sealed partial class ModelViewport
         var ids = new List<int>();
         foreach (var c in _objectClipboard)
         {
-            ids.Add(AddObjectCopy(MeshOps.Clone(c.Mesh), c.Transform, c.Name, c.Source, c.Spec));
+            ids.Add(AddObjectCopy(MeshOps.Clone(c.Mesh), c.Transform, c.Name, c.Source, c.Spec, c.AnimationSource));
         }
 
         if (ids.Count > 0)
@@ -279,7 +279,7 @@ public sealed partial class ModelViewport
         foreach (var o in SelectedObjects())
         {
             var mesh = linked ? o.Mesh : MeshOps.Clone(o.Mesh);
-            ids.Add(AddObjectCopy(mesh, o.Transform, o.Name, o.SourcePath, GetPrimitiveSpec(o.Id)));
+            ids.Add(AddObjectCopy(mesh, o.Transform, o.Name, o.SourcePath, GetPrimitiveSpec(o.Id), o.AnimationSourcePath));
             if (TryGetObject(ids[^1], out var copy)) CopySlots(o, copy);
         }
 
@@ -300,9 +300,9 @@ public sealed partial class ModelViewport
         }
     }
 
-    int AddObjectCopy(MeshData mesh, ObjectTransform transform, string name, string? source, PrimitiveSpec? spec)
+    int AddObjectCopy(MeshData mesh, ObjectTransform transform, string name, string? source, PrimitiveSpec? spec, string? animationSource = null)
     {
-        var obj = new SceneObject { Id = _nextId++, Name = UniqueName(BaseName(name)), SourcePath = source, Mesh = mesh };
+        var obj = new SceneObject { Id = _nextId++, Name = UniqueName(BaseName(name)), SourcePath = source, AnimationSourcePath = animationSource ?? source, Mesh = mesh };
         obj.Transform = transform;
         _objects.Add(obj);
         if (spec != null)

@@ -72,6 +72,7 @@ public sealed partial class ModelViewport
             Id = _nextId++,
             Name = UniqueObjectName(baseName),
             SourcePath = path,
+            AnimationSourcePath = path,
             Mesh = mesh,
             ImportOffset = center,
         };

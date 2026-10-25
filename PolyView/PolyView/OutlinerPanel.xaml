@@ -194,6 +194,7 @@
                                 <ColumnDefinition Width="22"/>
                                 <ColumnDefinition Width="22"/>
                                 <ColumnDefinition Width="22"/>
+                                <ColumnDefinition Width="22"/>
                             </Grid.ColumnDefinitions>
                             <!-- vertical guide lines -->
                             <ItemsControl Grid.Column="0" ItemsSource="{Binding GuideLines}" IsHitTestVisible="False">
@@ -264,7 +265,12 @@
                                 <Path Data="{Binding EyeData}" Stroke="{StaticResource ToggleBrush}" StrokeThickness="1.2"
                                       StrokeLineJoin="Round" Opacity="{Binding ToggleOpacity}"/>
                             </ToggleButton>
-                            <ToggleButton Grid.Column="8" Style="{StaticResource IconToggle}" IsChecked="{Binding Renderable, Mode=TwoWay}"
+                            <ToggleButton Grid.Column="8" Style="{StaticResource IconToggle}" IsChecked="{Binding BoneVisible, Mode=TwoWay}"
+                                          Visibility="{Binding BoneToggleVisibility}" ToolTip="{Binding BoneEyeTip}">
+                                <Path Data="{Binding BoneEyeData}" Stroke="{StaticResource ToggleBrush}" StrokeThickness="1.2"
+                                      StrokeLineJoin="Round" Opacity="{Binding BoneToggleOpacity}"/>
+                            </ToggleButton>
+                            <ToggleButton Grid.Column="9" Style="{StaticResource IconToggle}" IsChecked="{Binding Renderable, Mode=TwoWay}"
                                           Visibility="{Binding ToggleVisibility}" ToolTip="{Binding RenderTip}">
                                 <Path Data="M1.5,4.5 H9.5 V11.5 H1.5 Z M9.5,7 L13.5,5 V11 L9.5,9 Z" Stroke="{StaticResource ToggleBrush}"
                                       StrokeThickness="1.2" StrokeLineJoin="Round" Opacity="{Binding RenderOpacity}"/>

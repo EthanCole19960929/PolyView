@@ -53,8 +53,10 @@ public sealed class MeshData
     public required string Name { get; init; }
     public required Vertex[] Vertices { get; init; }
     public required uint[] Indices { get; init; }
-    public Vector3 Min { get; init; }
-    public Vector3 Max { get; init; }
+    Vector3 _min, _max;
+    public Vector3 Min { get => _min; init => _min = value; }
+    public Vector3 Max { get => _max; init => _max = value; }
+    internal void UpdateBounds(Vector3 min, Vector3 max) { _min = min; _max = max; }
 
     /// <summary>为空时整份索引当作一段、无贴图、单面绘制（OBJ/STL）。</summary>
     public MeshPart[] Parts { get; init; } = [];
@@ -193,6 +195,9 @@ public sealed class SceneNode
     public int Parent { get; init; } = -1;
 
     public SceneNodeKind Kind { get; init; }
+
+    /// <summary>True when this node is referenced by a skin as a deforming joint.</summary>
+    public bool IsBone { get; init; }
 
     /// <summary>相对父节点的变换（System.Numerics 行向量约定：v * Local * Parent.World）。</summary>
     public Matrix4x4 Local { get; init; } = Matrix4x4.Identity;

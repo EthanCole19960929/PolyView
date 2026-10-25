@@ -65,20 +65,41 @@
                 <TextBlock x:Name="HintText" Foreground="#FF8C8C8C" TextTrimming="CharacterEllipsis"/>
             </DockPanel>
         </Border>
-        <Grid DockPanel.Dock="Right" Width="300">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*" MinHeight="120"/>
-                <RowDefinition Height="5"/>
-                <RowDefinition Height="1.4*" MinHeight="160"/>
-            </Grid.RowDefinitions>
-            <local:OutlinerPanel x:Name="Outliner" Grid.Row="0"/>
-            <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" Background="#FF1D1D1D" ResizeDirection="Rows"/>
-            <local:PropertiesEditor x:Name="Properties" Grid.Row="2"/>
-        </Grid>
         <Grid>
-            <local:ModelViewport x:Name="Viewport"/>
-            <TextBlock x:Name="ProjectionText" Foreground="#FFE6E6E6" Margin="50,38,0,0" FontSize="12"
-                       HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="300"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="300" MinWidth="220"/>
+            </Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <local:ModelViewport x:Name="Viewport"/>
+                <TextBlock x:Name="ProjectionText" Foreground="#FFE6E6E6" Margin="50,38,0,0" FontSize="12"
+                           HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False"/>
+            </Grid>
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Background="#FF1D1D1D"
+                          Cursor="SizeWE" ShowsPreview="True" ToolTip="拖动以调整视口与侧栏宽度 / Drag to resize viewport and sidebar"/>
+            <TabControl x:Name="SideTabs" Grid.Column="2" Background="#FF282828" Foreground="#FFE6E6E6" BorderThickness="0">
+                <TabItem x:Name="SceneTab" Background="#FF303030" Foreground="#FFE6E6E6" Padding="10,4">
+                    <Grid Background="#FF282828">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" MinHeight="120"/>
+                            <RowDefinition Height="5"/>
+                            <RowDefinition Height="1.4*" MinHeight="160"/>
+                        </Grid.RowDefinitions>
+                        <local:OutlinerPanel x:Name="Outliner" Grid.Row="0"/>
+                        <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" Background="#FF1D1D1D" ResizeDirection="Rows"/>
+                        <local:PropertiesEditor x:Name="Properties" Grid.Row="2"/>
+                    </Grid>
+                </TabItem>
+                <TabItem x:Name="AnimationTab" Background="#FF303030" Foreground="#FFE6E6E6" Padding="10,4">
+                    <local:AnimationPanel x:Name="Animations"/>
+                </TabItem>
+            </TabControl>
         </Grid>
     </DockPanel>
 </Window>

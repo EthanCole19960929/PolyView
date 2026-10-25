@@ -76,6 +76,12 @@ public static partial class UiText
     public static string TipCollectionHide => Chinese ? "\u5728\u89c6\u56fe\u4e2d\u9690\u85cf\n\u9690\u85cf\u96c6\u5408\u5185\u7684\u6240\u6709\u7269\u4f53\u3002" : "Hide in Viewport\nHides every object in the collection.";
     public static string TipDisableRender => Chinese ? "\u7981\u7528\u6e32\u67d3\n\u5173\u95ed\u540e\u8be5\u9879\uff08\u53ca\u96c6\u5408\u5185\u7269\u4f53\uff09\u4e0d\u53c2\u4e0e\u6e32\u67d3\u3002" : "Disable in Renders\nWhen off, this item (and objects in the collection) are left out of renders.";
     public static string OutlinerSearch => Chinese ? "搜索" : "Search";
+    public static string ViewportBones => Chinese ? "骨骼" : "Bones";
+    public static string ViewportBonesTooltip => Chinese ? "显示或隐藏模型骨骼" : "Show or hide the model skeleton";
+    public static string ViewportOverlay => Chinese ? "视图叠加" : "Viewport Overlays";
+    public static string OverlayGrid => Chinese ? "地面网格" : "Floor Grid";
+    public static string OverlaySelectionOutline => Chinese ? "选中物体轮廓" : "Selected Object Outline";
+    public static string ToggleBoneOverlay => Chinese ? "显示或隐藏此骨骼叠加" : "Show or hide this bone overlay";
     public static string TransformTitle => Chinese ? "变换" : "Transform";
     public static string TransformLocation => Chinese ? "位置" : "Location";
     public static string TransformRotation => Chinese ? "旋转" : "Rotation";
