@@ -81,7 +81,6 @@ public static partial class UiText
     public static string ViewportOverlay => Chinese ? "视图叠加" : "Viewport Overlays";
     public static string OverlayGrid => Chinese ? "地面网格" : "Floor Grid";
     public static string OverlaySelectionOutline => Chinese ? "选中物体轮廓" : "Selected Object Outline";
-    public static string ToggleBoneOverlay => Chinese ? "显示或隐藏此骨骼叠加" : "Show or hide this bone overlay";
     public static string TransformTitle => Chinese ? "变换" : "Transform";
     public static string TransformLocation => Chinese ? "位置" : "Location";
     public static string TransformRotation => Chinese ? "旋转" : "Rotation";

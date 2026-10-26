@@ -68,8 +68,6 @@ public partial class MainWindow : Window
         MenuProjection.Header = UiText.MenuProjection;
         MenuHelp.Header = UiText.MenuHelp;
         MenuAbout.Header = UiText.MenuAbout;
-        SceneTab.Header = UiText.OutlinerTitle;
-        AnimationTab.Header = UiText.AnimationTitle;
         BuildWorkspaceTabs();
         HintText.Text = ""; // status bar hint removed (Blender keeps the left side empty)
         Outliner.ApplyLanguage();

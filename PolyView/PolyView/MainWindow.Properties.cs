@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 
 namespace PolyView;
@@ -20,6 +20,6 @@ public partial class MainWindow
             }
         }
 
-        Properties.Attach(Viewport);
+        Properties.Attach(Viewport, Animations);
     }
 }

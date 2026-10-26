@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -46,7 +46,7 @@ public partial class AnimationPanel : UserControl
     {
         if (_model == model) return;
         _model = model;
-        Visibility = model == null ? Visibility.Collapsed : Visibility.Visible;
+
         _ = RefreshAsync();
     }
 

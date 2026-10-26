@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Numerics;
 using System.Windows;
 using System.Windows.Controls;
@@ -33,7 +33,7 @@ public sealed class PropertiesEditor : UserControl
         return brush;
     }
 
-    public enum Tab { Scene, Object, Data, Material }
+    public enum Tab { Scene, Object, Data, Material, Animation }
 
     // icon geometry (16x16) and tint per tab
     static readonly Dictionary<Tab, (string Geo, Brush Color, string Zh, string En)> TabInfo = new()
@@ -42,6 +42,7 @@ public sealed class PropertiesEditor : UserControl
         [Tab.Object] = ("M3,3 H13 V13 H3 Z M6,6 H10 V10 H6 Z", Orange, "物体", "Object"),
         [Tab.Data] = ("M8,2 L14,13 H2 Z M8,2 V13 M5,8 H11", Green, "数据", "Data"),
         [Tab.Material] = ("M8,2 A6,6 0 1 1 7.99,2 M8,2 V14 M2,8 H14", Frozen(0xE0, 0x6C, 0x6C), "材质", "Material"),
+        [Tab.Animation] = ("M3,3 L8,7 L13,3 M8,7 V13 M8,9 L4,12 M8,9 L12,12", Frozen(0x75, 0xB8, 0xFF), "动画", "Animations"),
     };
 
     static readonly Dictionary<string, bool> Expanded = [];
@@ -56,6 +57,9 @@ public sealed class PropertiesEditor : UserControl
     readonly StackPanel _tabs = new() { Margin = new Thickness(2, 4, 2, 4) };
     readonly StackPanel _content = new() { Margin = new Thickness(6, 4, 6, 8) };
     readonly ScrollViewer _scroll;
+    readonly Grid _animationHost = new();
+    FrameworkElement? _propertyHeader;
+    FrameworkElement? _objectHeader;
     readonly TextBox _search = new();
     readonly ToggleButton _pin = new() { Width = 22, Height = 22, Focusable = false, Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
     readonly Path _headerIcon = new() { Width = 14, Height = 14, Stretch = Stretch.Uniform, StrokeThickness = 1.3, Margin = new Thickness(6, 0, 6, 0) };
@@ -103,6 +107,7 @@ public sealed class PropertiesEditor : UserControl
 
         // object header: icon + name + pin
         var objHeader = new DockPanel { Margin = new Thickness(4, 4, 4, 2), Height = 24 };
+        _objectHeader = objHeader;
         _pin.Content = new Path { Data = Geometry.Parse("M9,1 L15,7 L12,8 L9,11 L9,14 L2,7 L5,7 L8,4 Z M5,11 L1,15"), Stroke = DimText, StrokeThickness = 1.1, Width = 13, Height = 13, Stretch = Stretch.Uniform };
         _pin.ToolTip = UiText.T("固定：属性编辑器始终显示当前物体", "Pin: keep showing this object");
         _pin.Checked += (_, _) => { _pinnedId = _viewport?.SelectedId ?? -1; ((Path)_pin.Content).Stroke = TextBrush; Refresh(); };
@@ -113,6 +118,10 @@ public sealed class PropertiesEditor : UserControl
         objHeader.Children.Add(_headerName);
 
         _scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _content };
+        var contentHost = new Grid();
+        contentHost.Children.Add(_scroll);
+        _animationHost.Visibility = Visibility.Collapsed;
+        contentHost.Children.Add(_animationHost);
         var tabBorder = new Border { Background = Frozen(0x23, 0x23, 0x23), Child = _tabs, Width = 30 };
         var body = new DockPanel();
         DockPanel.SetDock(tabBorder, Dock.Left);
@@ -120,10 +129,11 @@ public sealed class PropertiesEditor : UserControl
         var right = new DockPanel();
         DockPanel.SetDock(objHeader, Dock.Top);
         right.Children.Add(objHeader);
-        right.Children.Add(_scroll);
+        right.Children.Add(contentHost);
         body.Children.Add(right);
 
         var root = new DockPanel();
+        _propertyHeader = top;
         DockPanel.SetDock(top, Dock.Top);
         root.Children.Add(top);
         root.Children.Add(body);
@@ -132,9 +142,10 @@ public sealed class PropertiesEditor : UserControl
 
     public Tab CurrentTab => _tab;
 
-    public void Attach(ModelViewport viewport)
+    public void Attach(ModelViewport viewport, AnimationPanel animationPanel)
     {
         _viewport = viewport;
+        _animationHost.Children.Add(animationPanel);
         viewport.SelectionChanged += (_, _) => Refresh();
         viewport.SceneChanged += (_, _) => Refresh();
         viewport.ObjectChanged += (_, id) => { if (id == ActiveId) QueueUpdate(); };
@@ -175,7 +186,7 @@ public sealed class PropertiesEditor : UserControl
         }, System.Windows.Threading.DispatcherPriority.Render);
     }
 
-    static bool IsObjectTab(Tab t) => t >= Tab.Object;
+    static bool IsObjectTab(Tab t) => t is Tab.Object or Tab.Data or Tab.Material;
 
     void Refresh()
     {
@@ -183,12 +194,18 @@ public sealed class PropertiesEditor : UserControl
         int id = ActiveId;
         bool hasObject = _viewport.TryGetObjectInfo(id, out var info);
         if (!hasObject && IsObjectTab(_tab)) _tab = Tab.Scene;
+        bool animationTab = _tab == Tab.Animation;
+        _propertyHeader!.Visibility = animationTab ? Visibility.Collapsed : Visibility.Visible;
+        _objectHeader!.Visibility = animationTab ? Visibility.Collapsed : Visibility.Visible;
+        _scroll.Visibility = animationTab ? Visibility.Collapsed : Visibility.Visible;
+        _animationHost.Visibility = animationTab ? Visibility.Visible : Visibility.Collapsed;
         BuildTabStrip(hasObject);
 
-        var (geo, color, _, _) = TabInfo[hasObject && IsObjectTab(_tab) ? (_tab == Tab.Material ? Tab.Material : _tab == Tab.Data ? Tab.Data : Tab.Object) : Tab.Scene];
+        var headerTab = animationTab ? Tab.Animation : hasObject && IsObjectTab(_tab) ? (_tab == Tab.Material ? Tab.Material : _tab == Tab.Data ? Tab.Data : Tab.Object) : Tab.Scene;
+        var (geo, color, _, _) = TabInfo[headerTab];
         _headerIcon.Data = Geometry.Parse(geo);
         _headerIcon.Stroke = color;
-        _headerName.Text = hasObject && IsObjectTab(_tab)
+        _headerName.Text = animationTab ? UiText.AnimationTitle : hasObject && IsObjectTab(_tab)
             ? (_tab == Tab.Data ? _viewport.GetMeshDataName(id) : info.Name)
             : "Scene";
 
@@ -219,8 +236,8 @@ public sealed class PropertiesEditor : UserControl
     {
         _tabs.Children.Clear();
         Tab[][] groups = hasObject
-            ? [[Tab.Scene], [Tab.Object, Tab.Data], [Tab.Material]]
-            : [[Tab.Scene]];
+            ? [[Tab.Scene], [Tab.Animation], [Tab.Object, Tab.Data], [Tab.Material]]
+            : [[Tab.Scene], [Tab.Animation]];
         foreach (var group in groups)
         {
             foreach (var t in group)

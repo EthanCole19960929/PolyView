@@ -1,10 +1,12 @@
-using System.Windows.Threading;
+﻿using System.Windows.Threading;
 
 namespace PolyView;
 
 public partial class MainWindow
 {
     bool _animationUpdateQueued;
+
+    public AnimationPanel Animations { get; } = new();
 
     void InitAnimations()
     {
@@ -24,11 +26,9 @@ public partial class MainWindow
             _animationUpdateQueued = false;
             var source = Viewport.GetAnimationSource();
             bool changedModel = source?.ObjectId != Animations.Model?.ObjectId;
-            AnimationTab.IsEnabled = source != null;
             if (changedModel)
             {
                 Viewport.StopAnimation();
-                if (source != null) SideTabs.SelectedItem = AnimationTab;
             }
             Animations.SetModel(source);
         }, DispatcherPriority.Background);

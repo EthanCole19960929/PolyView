@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -149,7 +149,7 @@ public sealed partial class ModelViewport
                     parent = nodes[parent].Parent;
                 }
 
-                if (parent < 0 || !NodeAndAncestorsVisible(o, i) || !NodeAndAncestorsVisible(o, parent))
+                if (parent < 0 || !BoneHierarchyVisible(o, i) || !BoneHierarchyVisible(o, parent))
                 {
                     continue;
                 }
@@ -163,11 +163,11 @@ public sealed partial class ModelViewport
         _renderer.SetBoneGeometry(_boneVertices, _boneCount);
     }
 
-    static bool NodeAndAncestorsVisible(SceneObject o, int node)
+    static bool BoneHierarchyVisible(SceneObject o, int node)
     {
         for (int i = node; i >= 0; i = o.Mesh.Nodes[i].Parent)
         {
-            if (o.HiddenNodes.Contains(i))
+            if (o.HiddenNodes.Contains(i) || o.HiddenBones.Contains(i))
             {
                 return false;
             }
